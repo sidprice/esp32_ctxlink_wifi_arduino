@@ -14,22 +14,32 @@
 
 #include "serial_control.h"
 #include "wifi_station.h"
+#include "arduino-timer.h"
 
 // Wi-Fi credentials
 // TODO These need to be set from ctxLink and saved in the preferences
 
-const char* ssid = "Avian Ambassadors";
-const char* password = "mijo498rocks";
+const char* ssid = "ctxlink_net";
+const char* password = "pass_phrase";
 
-void initWiFi(void) {
+//
+// Timer used to monitor Wi-Fi connection
+//
+auto wifi_timer = timer_create_default() ;
+
+void deinitWiFi(void) {
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+} // deinitWiFi() end
+
+void configWiFi(void) {
   wl_status_t wifi_status ;
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
+  MONITOR(println("Configuring Wi-Fi")) ;
+  deinitWiFi() ;
   delay(100);
   //
   // Set up the Wi-Fi Station
   //
-
   // TODO Set the hostname to something unique
   //
   //WiFi.setHostname("ctxLink_adapter_1") ;
@@ -47,4 +57,30 @@ void initWiFi(void) {
 
   MONITOR(print("RSSI: "));
   MONITOR(println(WiFi.RSSI()));
+} // configWiFi() end
+
+//
+// Check the Wi-Fi connection status
+//
+bool checkWiFi(void *) {
+  wl_status_t wifi_status = WiFi.status() ;
+  if (wifi_status != WL_CONNECTED) {
+    MONITOR(println("Wi-Fi disconnected")) ;
+    configWiFi() ;
+  }
+  return true;
+}
+
+void timerKick(void) {
+  wifi_timer.tick() ;
+} // timerKick() end
+
+//
+// Set up the Wi-Fi connection and monitor the status
+//
+void initWiFi(void) {
+
+    wifi_timer.every(1000, checkWiFi);
+    while(WiFi.status() != WL_CONNECTED)
+      timerKick() ;
 } // initWiFi() end

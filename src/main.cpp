@@ -21,15 +21,14 @@ void setup() {
   while (!Serial)
     delay(10);     // will pause Zero, Leonardo, etc until serial console opens
 #endif
-// //while(1) {
-//   delay(2000) ;
   MONITOR(println("ctxLink ESP32 WiFi adapter")) ;
-//}
-
+  //
+  // Set up Wi-Fi connection and monitor status
+  //
   initWiFi() ;
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  timerKick() ;
   delay(1000) ;
 }

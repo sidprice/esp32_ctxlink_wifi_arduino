@@ -13,4 +13,6 @@
 #define WIFI_STATION_H
 
 void initWiFi(void) ;
+void checkWiFi(void) ;
+void timerKick(void) ;
 #endif // WIFI_STATION_H
