@@ -13,6 +13,7 @@
 
 #include "serial_control.h"
 #include "wifi_station.h"
+#include "ota.h"
 
 void setup() {
   MONITOR(begin(115200));
@@ -26,9 +27,12 @@ void setup() {
   // Set up Wi-Fi connection and monitor status
   //
   initWiFi() ;
+
+  ota_setup() ;
 }
 
 void loop() {
   timerKick() ;
+  otaKick() ;
   delay(1000) ;
 }

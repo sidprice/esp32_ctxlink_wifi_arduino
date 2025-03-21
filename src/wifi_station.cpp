@@ -42,8 +42,8 @@ void configWiFi(void) {
   //
   // TODO Set the hostname to something unique
   //
-  //WiFi.setHostname("ctxLink_adapter_1") ;
-  //Serial.print("Hostname = ") ; Serial.println(WiFi.getHostname()) ;
+  WiFi.setHostname("ctxLink_adapter_1") ;
+  MONITOR(println("Hostname = ")) ; Serial.println(WiFi.getHostname()) ;
   wifi_status = WiFi.begin(ssid, password);
   MONITOR(print("Wi-Fi begin = ")); MONITOR(println(wifi_status)) ;
 
