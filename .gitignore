@@ -6,3 +6,4 @@
 include/README
 lib/README
 test/README
+test_files/*
