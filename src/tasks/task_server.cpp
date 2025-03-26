@@ -40,7 +40,7 @@ void task_wifi_server(void *pvParameters) {
     }
 
     // Listen for incoming connections
-    if (listen(server_fd, 5) < 0) {
+    if (listen(server_fd, 5) < 0) { // TODO: Test for single client operation, set to 1 or 0?
         MONITOR(print("Socket listen failed -> ")) ; MONITOR(println(errno)) ;
         return;
     }
@@ -62,10 +62,16 @@ void task_wifi_server(void *pvParameters) {
             //
             while(true) {
                 int bytes_received = read(client_fd, &rxBuffer, sizeof(rxBuffer));
-                for (int i = 0; i < bytes_received; i++) {
-                    MONITOR(print(rxBuffer[i])) ;
+                if (bytes_received > 0 ) {
+                    for (int i = 0; i < bytes_received; i++) {
+                        MONITOR(print(rxBuffer[i])) ;
+                    }
+                    MONITOR(println()) ;
+                } else {
+                    MONITOR(println("Client disconnected"));
+                    close(client_fd);
+                    break;
                 }
-                MONITOR(println()) ;
             }
         }
             
