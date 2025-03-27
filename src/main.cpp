@@ -14,6 +14,8 @@
 #include "serial_control.h"
 #include "wifi_station.h"
 #include "ota.h"
+#include "ctxlink.h"
+#include "tasks/task_server.h"
 
 void setup() {
   MONITOR(begin(115200));
@@ -27,8 +29,16 @@ void setup() {
   // Set up Wi-Fi connection and monitor status
   //
   initWiFi() ;
-
   ota_setup() ;
+  initCtxLink() ;
+  //
+  // Create the GDB Server task
+  //
+  xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, NULL) ;
+  //
+  // Create the SPI communications task
+  //
+  // xTaskCreate(task_spi_comms, "SPI Comms", 4096, NULL, 1, NULL) ;
 }
 
 void loop() {
