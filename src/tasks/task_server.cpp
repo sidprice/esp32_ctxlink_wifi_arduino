@@ -16,6 +16,8 @@
 #include "serial_control.h"
 #include "task_server.h"
 
+#include "ctxlink.h"
+
 char rxBuffer[1024] ;
 
 void task_wifi_server(void *pvParameters) {
@@ -67,6 +69,10 @@ void task_wifi_server(void *pvParameters) {
                         MONITOR(print(rxBuffer[i])) ;
                     }
                     MONITOR(println()) ;
+                    //
+                    // Send input to ctxLink
+                    //
+                    spi_transaction((uint8_t *)rxBuffer, (uint8_t *)rxBuffer, bytes_received+2) ;
                 } else {
                     MONITOR(println("Client disconnected"));
                     close(client_fd);

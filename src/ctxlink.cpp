@@ -26,26 +26,42 @@ static const uint8_t ATTN = 9 ; // GPIO pin for ctxLink ATTN line
  * 
  * @param trans 
  * 
- * Assert ATTN line to indicate data is ready to be read by ctxLink
+ * If the transaction is a transmission, assert ATTN line to indicate data is
+ * ready to be read by ctxLink.
+ * 
+ * A transmission is identified by the first two bytes of the passed tx buffer
+ * being none-zero.`
  */
 void my_post_setup_cb(spi_slave_transaction_t *trans)
 {
-    // MONITOR(println("my_post_setup_cb")) ;
-    digitalWrite(ATTN, LOW) ; // Set ATTN line low to indicate data is ready to be read by ctxLink
+    uint8_t * buffer = (uint8_t *)trans->tx_buffer ;
+    if (*buffer != 0  && *(buffer + 1) != 0) {
+        digitalWrite(ATTN, LOW) ; // Set ATTN line low to indicate data is ready to be read by ctxLink
+    }
+    MONITOR(println("my_post_setup_cb")) ;
 }
 
 /**
- * @brief Callback function, after all data is read by ctxLink
+ * @brief Callback function, after all data is Transferred
  * 
  * @param trans 
  * 
- * Negate the ATTN line
+ * Negate the ATTN line 
  */
 
 void my_post_trans_cb(spi_slave_transaction_t *trans)
 {
-    // MONITOR(println("my_post_trans_cb")) ;
-    digitalWrite(ATTN, HIGH );
+  uint8_t * buffer = (uint8_t *)trans->tx_buffer ;
+  
+  digitalWrite(ATTN, HIGH );
+  //
+  //. If this was not a transmission process the received data
+  //
+  if ( *buffer == 0 && *(buffer+1) == 0) {
+    MONITOR(println("Received data")) ;
+  } else {
+    MONITOR(println("Transmitted data")) ;
+  }
 }
 
  void initCtxLink(void) {
@@ -68,7 +84,6 @@ spi_bus_config_t buscfg = {
     .post_trans_cb = my_post_trans_cb
   };
   
-  // TODO configure ATTN output to ctxLink
   //
   // Configure the SPI GPIOs so spurious signals are not detected
   // when no master is connected. This is actually unlikely since
@@ -82,26 +97,19 @@ spi_bus_config_t buscfg = {
   spi_slave_initialize(SPI2_HOST, &buscfg, &slvcfg, SPI_DMA_CH_AUTO);
 }
 
-// TODO This is a blocking function REALLY will need to have this operate using interrupts/callbacks
-void testSPI(void) {
-    MONITOR(println("testSPI")) ;
-    uint8_t rxBuffer[128] = {0} ;
-    uint8_t txBuffer[128] = {0} ;
+/**
+ * @brief Set up a transaction between ESP32 and ctxLink
+ * 
+ * @param rx_buffer 
+ * @param tx_buffer 
+ * @param buffer_length 
+ */
+void spi_transaction(uint8_t * rx_buffer, uint8_t * tx_buffer, size_t buffer_length) {
+    MONITOR(println("spi_transaction")) ;
     spi_slave_transaction_t t = {0} ;
-    t.length = 6 * 8 ;
-    t.rx_buffer = rxBuffer ;
-    t.tx_buffer = txBuffer ;
-    spi_slave_transmit(SPI2_HOST, &t, portMAX_DELAY);
-    // //
-    // // Now send a simple reply to ctxLink
-    // //
-    // txBuffer[0] = 0x01 ;
-    // txBuffer[1] = 0x02 ;
-    // txBuffer[2] = 0x03 ;
-    // txBuffer[3] = 0x04 ;
-    // txBuffer[4] = 0x05 ;
-    // txBuffer[5] = 0x06 ;
-    // spi_slave_transmit(SPI2_HOST, &t, portMAX_DELAY);
-    // for (int i = 0; i < 6; i++) MONITOR(print(rxBuffer[i], HEX));
-    //     MONITOR(println());
+    t.length = buffer_length * 8 ;
+    t.rx_buffer = rx_buffer ;
+    t.tx_buffer = tx_buffer ;
+    // spi_slave_transmit(SPI2_HOST, &t, portMAX_DELAY); // TODO Should the timeout be zero?
+    spi_slave_queue_trans(SPI2_HOST, &t, portMAX_DELAY);
 }

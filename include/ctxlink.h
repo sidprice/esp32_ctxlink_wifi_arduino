@@ -15,4 +15,5 @@
 #define CTXLINK_H
 
 void initCtxLink(void) ;
+void spi_transaction(uint8_t * rx_buffer, uint8_t * tx_buffer, size_t buffer_length) ;
 #endif // CTXLINK_H
