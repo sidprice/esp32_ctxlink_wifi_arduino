@@ -14,6 +14,7 @@
 
 #include "serial_control.h"
 #include "wifi_station.h"
+#include "ctxlink.h"
 #include "arduino-timer.h"
 
 // Wi-Fi credentials
@@ -49,10 +50,13 @@ void configWiFi(void) {
 
   MONITOR(print("Connecting to WiFi .."));
 
+  // TODO Failure to connect to Wi-Fi should not block
   while ((wifi_status = WiFi.status()) != WL_CONNECTED) {
     MONITOR(print("Wi-Fi status = ")); MONITOR(println(wifi_status)) ;
     delay(5000);
   }
+  // TODO The following needs reconsideration when Wi-Fi fails
+  set_ready() ; // Indicate to ctxLink that the ESP32 is ready
   MONITOR(println(WiFi.localIP()));
 
   MONITOR(print("RSSI: "));

@@ -16,6 +16,7 @@
 #include "ota.h"
 #include "ctxlink.h"
 #include "tasks/task_server.h"
+#include "tasks/task_spi_comms.h"
 
 void setup() {
   MONITOR(begin(115200));
@@ -38,7 +39,7 @@ void setup() {
   //
   // Create the SPI communications task
   //
-  // xTaskCreate(task_spi_comms, "SPI Comms", 4096, NULL, 1, NULL) ;
+  xTaskCreate(task_spi_comms, "SPI Comms", 4096, NULL, 1, NULL) ;
 }
 
 void loop() {
