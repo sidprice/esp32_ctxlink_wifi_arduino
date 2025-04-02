@@ -12,104 +12,98 @@
  */
 
 #include <Arduino.h>
-#include <SPI.h>
-#include <driver/spi_slave.h>
 
 #include "serial_control.h"
-
+#include "tasks/task_server.h"
 #include "ctxlink.h"
+#include "helper.h"
+#include "ESP32DMASPISlave.h"
+#include "tasks/task_spi_comms.h"
 
-static const uint8_t ATTN = 9 ; // GPIO pin for ctxLink ATTN line
+static const uint8_t nREADY = 8 ; // GPIO pin for ctxLink nReady input
 
-/**
- * @brief Callback function, after setup of data send transaction
- * 
- * @param trans 
- * 
- * If the transaction is a transmission, assert ATTN line to indicate data is
- * ready to be read by ctxLink.
- * 
- * A transmission is identified by the first two bytes of the passed tx buffer
- * being none-zero.`
- */
-void my_post_setup_cb(spi_slave_transaction_t *trans)
+static bool is_tx = false ;
+
+ESP32DMASPI::Slave slave;
+
+static constexpr size_t BUFFER_SIZE = 256; // should be multiple of 4
+static constexpr size_t QUEUE_SIZE = 1;
+
+// definition of user callback
+void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg)
 {
-    uint8_t * buffer = (uint8_t *)trans->tx_buffer ;
-    if (*buffer != 0  && *(buffer + 1) != 0) {
-        digitalWrite(ATTN, LOW) ; // Set ATTN line low to indicate data is ready to be read by ctxLink
-    }
-    MONITOR(println("my_post_setup_cb")) ;
+    // NOTE: here is an ISR Context
+    //       there are significant limitations on what can be done with ISRs,
+    //       so use this feature carefully!
+
+    //
+    // Send a message to the SPI task, data transaction is completed.
+    //
+    // If the ATTN port was asserted, this is a tx completion, otherwise
+    // if is an rx completion. Send appropriate buffer pointer.
+    //
+    uint8_t *data = (is_tx == true) ? (uint8_t*)trans->tx_buffer : (uint8_t *)trans->rx_buffer ;
+    xQueueSendFromISR(spi_comms_queue,&data, NULL);
 }
 
-/**
- * @brief Callback function, after all data is Transferred
- * 
- * @param trans 
- * 
- * Negate the ATTN line 
- */
-
-void my_post_trans_cb(spi_slave_transaction_t *trans)
+void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans, void *arg)
 {
-  uint8_t * buffer = (uint8_t *)trans->tx_buffer ;
-  
-  digitalWrite(ATTN, HIGH );
-  //
-  //. If this was not a transmission process the received data
-  //
-  if ( *buffer == 0 && *(buffer+1) == 0) {
-    MONITOR(println("Received data")) ;
-  } else {
-    MONITOR(println("Transmitted data")) ;
-  }
+    // NOTE: here is an ISR Context
+    //       there are significant limitations on what can be done with ISRs,
+    //       so use this feature carefully!
+
 }
 
- void initCtxLink(void) {
-// Configuration for the SPI bus
-spi_bus_config_t buscfg = {
-    .mosi_io_num = MOSI,  // MOSI pin
-    .miso_io_num = MISO,  // MISO pin
-    .sclk_io_num = SCK,  // SCLK pin
-    .quadwp_io_num = -1,
-    .quadhd_io_num = -1
-  };
-
-  // Configuration for the SPI slave interface
-  spi_slave_interface_config_t slvcfg = {
-    .spics_io_num = SS,  // CS pin
-    .flags = 0,
-    .queue_size = 3,
-    .mode = 0,
-    .post_setup_cb = my_post_setup_cb,
-    .post_trans_cb = my_post_trans_cb
-  };
-  
-  //
-  // Configure the SPI GPIOs so spurious signals are not detected
-  // when no master is connected. This is actually unlikely since
-  // this MCU will be on the same PCB as ctxLink
-  //
-  pinMode(MOSI, OUTPUT | PULLUP );
-  pinMode(MISO, OUTPUT | PULLUP );
-  pinMode(SS, OUTPUT | PULLUP );
-  pinMode(ATTN, OUTPUT );
-  digitalWrite(ATTN, HIGH ) ;
-  spi_slave_initialize(SPI2_HOST, &buscfg, &slvcfg, SPI_DMA_CH_AUTO);
+void spi_ss_activated(void) {
+  // This function is called when the ctxLink CS line is activated
+  // It is used to wake up the ESP32 from deep sleep mode
+  MONITOR(println("ctxLink CS activated")) ;
 }
 
 /**
- * @brief Set up a transaction between ESP32 and ctxLink
+ * @brief Initialize the SPI peripheral for ctxLink communication
  * 
- * @param rx_buffer 
- * @param tx_buffer 
- * @param buffer_length 
  */
-void spi_transaction(uint8_t * rx_buffer, uint8_t * tx_buffer, size_t buffer_length) {
-    MONITOR(println("spi_transaction")) ;
-    spi_slave_transaction_t t = {0} ;
-    t.length = buffer_length * 8 ;
-    t.rx_buffer = rx_buffer ;
-    t.tx_buffer = tx_buffer ;
-    // spi_slave_transmit(SPI2_HOST, &t, portMAX_DELAY); // TODO Should the timeout be zero?
-    spi_slave_queue_trans(SPI2_HOST, &t, portMAX_DELAY);
+void initCtxLink(void) {
+  slave.setDataMode(SPI_MODE1);
+  slave.setMaxTransferSize(BUFFER_SIZE);  // default: 4092 bytes
+  slave.setQueueSize(QUEUE_SIZE);         // default: 1
+
+  // begin() after setting
+  slave.begin();  // default: HSPI (please refer README for pin assignments)
+  slave.setUserPostSetupCbAndArg(userTransactionCallback, NULL);
+  slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
+}
+
+/**
+ * @brief Create a SPI transaction with the ctxLink module
+ * 
+ * The slave must always be prepared for the master to send
+ * a transaction. This pending transaction is created to service
+ * a transaction from the master.
+ * 
+ * Note:  When the slave has a packet to send to the master, the pending
+ *        transaction will be removed from the queue, and a new one
+ *        created after the slave packet has been sent to the master.
+ */
+void spi_create_pending_transaction(uint8_t *dma_tx_buffer, uint8_t *dma_rx_buffer, bool isTx) {
+  is_tx = isTx ; // Set the transaction type
+  // with user-defined ISR callback that is called before/after transaction start
+  // you can set these callbacks and arguments before each queue()
+  slave.setUserPostSetupCbAndArg(userPostSetupCallback, NULL);
+  slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
+  // queue transaction and trigger it right now
+  slave.queue(dma_tx_buffer, dma_rx_buffer, BUFFER_SIZE);
+  slave.trigger();
+}
+
+/**
+ * @brief Indicate to ctxLink the ESP32 is ready
+ * 
+ * Initially this is asserted once a wireless connection is made, however
+ * in the future it may need to be asserted in there is no Wi-Fi connection.
+ * This would enable ctxLink to configure the Wi-Fi.
+ */
+void set_ready(void) {
+  digitalWrite(nREADY, LOW ) ;
 }

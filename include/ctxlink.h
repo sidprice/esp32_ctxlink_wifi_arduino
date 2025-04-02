@@ -14,6 +14,9 @@
  #ifndef CTXLINK_H
 #define CTXLINK_H
 
+constexpr uint8_t ATTN = 9 ; // GPIO pin for ctxLink ATTN input
+
 void initCtxLink(void) ;
-void spi_transaction(uint8_t * rx_buffer, uint8_t * tx_buffer, size_t buffer_length) ;
+void set_ready(void);
+void spi_create_pending_transaction(uint8_t *tx_buffer, uint8_t *rx_buffer, bool isTx) ;
 #endif // CTXLINK_H
