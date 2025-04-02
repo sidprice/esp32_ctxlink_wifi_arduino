@@ -37,13 +37,13 @@ static constexpr size_t PACKET_HEADER_SIZE = PACKET_HEADER_DATA_START;  // Size 
 size_t package_data(uint8_t * buffer, size_t data_length, size_t buffer_size) {
     memmove(buffer + PACKET_HEADER_DATA_START, buffer, data_length);  // Move the data to start 3 bytes in
 
-    buffer[PACKET_HEADER_MAGIC1] = PACKET_HEADER_MAGIC1;  // First byte of magic number
-    buffer[PACKET_HEADER_MAGIC2] = PACKET_HEADER_MAGIC2;  // Second byte of magic number
+    size_t packet_length = data_length + PACKET_HEADER_SIZE;  // Total packet length
+    size_t padding = packet_length % 4;  // Calculate padding to make the total size a multiple of 4 
+    buffer[PACKET_HEADER_MAGIC1] = PROTOCOL_MAGIC1;  // First byte of magic number
+    buffer[PACKET_HEADER_MAGIC2] = PROTOCOL_MAGIC2;  // Second byte of magic number
     buffer[PACKET_HEADER_LENGTH_MSB] = (data_length >> 8) & 0xFF;  // High byte of data length
     buffer[PACKET_HEADER_LENGTH_LSB] = data_length & 0xFF;         // Low byte of data length
     buffer[PACKET_HEADER_SOURCE_ID] = 0x01;  // Message source identifier (e.g. 0x01 for GDB)
-    size_t packet_length = data_length + PACKET_HEADER_SIZE;  // Total packet length
-    size_t padding = packet_length % 4;  // Calculate padding to make the total size a multiple of 4 
     if (padding > 0) {
         padding = 4 - padding;  // Calculate the number of padding bytes needed
         memset(buffer + packet_length, 0x00, padding);  // Fill the padding bytes with 0x00
