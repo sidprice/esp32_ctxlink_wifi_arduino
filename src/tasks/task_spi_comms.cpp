@@ -17,6 +17,7 @@
 #include "task_spi_comms.h"
 #include "driver/spi_slave.h"
 #include "ctxlink.h"
+#include "protocol.h"
 
 #define SPI_BUFFER_SIZE 1024
 #define SPI_BUFFER_COUNT 8
@@ -97,12 +98,12 @@ uint8_t *get_spi_buffer(uint8_t index) {
 void task_spi_comms(void *pvParameters) {
     static uint8_t *message ;
     spi_comms_queue = xQueueCreate(spi_comms_queue_length, sizeof(uint8_t *)) ; // Create the queue for the SPI task
-    //
-    // Create a transaction, ready to receive data from the master
-    //
-    spi_create_pending_transaction(NULL, get_next_spi_buffer(), false) ; // This is a pending rx transaction
-
     while(true) {
+        //
+        // Create a transaction, ready to receive data from the master
+        //
+        spi_create_pending_transaction(NULL, get_next_spi_buffer(), false) ; // This is a pending rx transaction
+
         // Wait for a message from the other tasks or spi driver
         xQueueReceive(spi_comms_queue, &message, portMAX_DELAY) ;
         //
@@ -113,10 +114,11 @@ void task_spi_comms(void *pvParameters) {
         //
         // Just print the message for now
         //
-        uint8_t *buffer = (uint8_t*)message ;
-        // Serial.printf("%02X\n", *message) ;
-        // Serial.printf("%02X\n", spi_buffers[0][0]) ;
-        MONITOR(print("Message received: ")) ; MONITOR(println((char*)buffer)) ;   
-        MONITOR(println()) ;
+        size_t packet_size ;
+        protocol_packet_type_e packet_type ;
+        uint8_t *packet_data ;
+        protocol_split(message, &packet_size, &packet_type, &packet_data) ;
+        MONITOR(print("Message received: ")) ; MONITOR(println((char*)packet_data)) ;
+        MONITOR(printf("Packet type: %02X\r\n", packet_type)) ;
     }
 }
