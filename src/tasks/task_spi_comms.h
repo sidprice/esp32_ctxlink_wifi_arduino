@@ -16,19 +16,6 @@
 
 #include <Arduino.h>
 
- /**
-  * @brief Structure used for inter-task messaging.
-  * 
-  * This structure is used to pass messages between the server tasks and the SPI communications task.
-  * 
-  * TODO    The structure needs to have an entry to identify the source of the message
-  */
-
-typedef struct task_spi_comms_message_t {
-    uint8_t buffer_index ;  /**< Index of the buffer being used */
-    uint16_t length ; /**< The number of bytes in the indexed buffer */
-} task_spi_comms_message_t ;
-
 extern QueueHandle_t spi_comms_queue ;
 
 void task_spi_comms(void *pvParameters) ;
