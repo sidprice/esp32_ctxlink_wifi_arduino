@@ -26,48 +26,73 @@ static bool is_tx = false ;
 
 ESP32DMASPI::Slave slave;
 
-static constexpr size_t BUFFER_SIZE = 256; // should be multiple of 4
+static constexpr size_t BUFFER_SIZE = 1024; // should be multiple of 4
 static constexpr size_t QUEUE_SIZE = 1;
 
-// definition of user callback
+static constexpr uint8_t empty_response[] = {0x00, 0x00, 0x00, 0x00}; // sent to spi task after transmission is done
+
+static uint8_t  *tx_saved_transaction ;
+
+/**
+ * @brief Save the passed transaction packet pointer for later transmission
+ * 
+ * @param transaction_buffer  Pointer to the packet to be sent
+ * 
+ *  We are about to start a TX transaction, so save the packet pointer and
+ *  assert the ATTN signal to ctxLink.
+ */
+void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer) {
+  tx_saved_transaction = transaction_buffer ;
+  digitalWrite(nREADY, HIGH) ;    // Will be asserted once the transaction is set up
+  digitalWrite(ATTN, LOW) ;
+}
+
+/**
+ * @brief Callback function on transaction completed
+ * 
+ * @param trans Pointer to the transaction that was completed
+ * @param arg   Unused user argument
+ */
 void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg)
 {
-    // NOTE: here is an ISR Context
-    //       there are significant limitations on what can be done with ISRs,
-    //       so use this feature carefully!
-
     //
     // Send a message to the SPI task, data transaction is completed.
     //
     // If the ATTN port was asserted, this is a tx completion, otherwise
     // if is an rx completion. Send appropriate buffer pointer.
     //
-    MONITOR(println("Post Transaction"));
     if ( is_tx ) 
       digitalWrite(ATTN, HIGH) ; // Set ATTN line high to indicate data is not ready to be read by ctxLink
     uint8_t *data = (is_tx == true) ? (uint8_t *)empty_response : (uint8_t *)trans->rx_buffer ;
     xQueueSendFromISR(spi_comms_queue,&data, NULL);
 }
 
+/**
+ * @brief Callback function, called after transaction setup is completed
+ * 
+ * @param trans Pointer to the transaction that was set up
+ * @param arg Unused user argument
+ */
 void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans, void *arg)
 {
-  MONITOR(println("Post Setup")) ;
-    // NOTE: here is an ISR Context
-    //       there are significant limitations on what can be done with ISRs,
-    //       so use this feature carefully!
-    //
-    // If the new transaction is a transmission, assert ATTN
-    //
-    if ( is_tx ) {
-      MONITOR(println("TX operation")) ;
-      digitalWrite(ATTN, LOW) ; // Set ATTN line low to indicate data is ready to be read by ctxLink
-    }
+  digitalWrite(nREADY,LOW) ;    // Tell ctxLink the transaction is ready to go.
 }
 
+/**
+ * @brief Interrupt handler for the SPI CS input falling transition
+ * 
+ *  If ATTN is asserted, set up a TX transaction using the saved txtransaction packet.
+ * 
+ *  Otherwise, do nothing.
+ */
 void spi_ss_activated(void) {
-  // This function is called when the ctxLink CS line is activated
-  // It is used to wake up the ESP32 from deep sleep mode
-  MONITOR(println("ctxLink CS activated")) ;
+  if (digitalRead(ATTN) == LOW) { // Is this a TX transaction?
+    // Set up a transaction to send the saved transaction buffer to ctxLink
+    spi_create_pending_transaction(tx_saved_transaction, NULL, true) ; // This is a pending tx transaction
+  } else {
+    // Set up a transaction to receive data from ctxLink
+    spi_create_pending_transaction(NULL, get_next_spi_buffer(), false) ; // This is a pending rx transaction
+  }
 }
 
 /**
@@ -130,3 +155,4 @@ void spi_create_pending_transaction(uint8_t *dma_tx_buffer, uint8_t *dma_rx_buff
 void set_ready(void) {
   digitalWrite(nREADY, LOW ) ;
 }
+

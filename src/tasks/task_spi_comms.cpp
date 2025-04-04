@@ -98,27 +98,55 @@ uint8_t *get_spi_buffer(uint8_t index) {
 void task_spi_comms(void *pvParameters) {
     static uint8_t *message ;
     spi_comms_queue = xQueueCreate(spi_comms_queue_length, sizeof(uint8_t *)) ; // Create the queue for the SPI task
-    while(true) {
-        //
-        // Create a transaction, ready to receive data from the master
-        //
-        spi_create_pending_transaction(NULL, get_next_spi_buffer(), false) ; // This is a pending rx transaction
 
+    //
+    // Create a transaction, ready to receive data from the master
+    //
+    // spi_create_pending_transaction(NULL, get_next_spi_buffer(), false) ; // This is a pending rx transaction
+
+    while(true) {
+        MONITOR(println("SPI Task Loop Start")) ;
         // Wait for a message from the other tasks or spi driver
         xQueueReceive(spi_comms_queue, &message, portMAX_DELAY) ;
         //
         // Process the message
         //
-        // TODO Add processing of the message source for routing
-
-        //
-        // Just print the message for now
-        //
         size_t packet_size ;
         protocol_packet_type_e packet_type ;
         uint8_t *packet_data ;
         protocol_split(message, &packet_size, &packet_type, &packet_data) ;
-        MONITOR(print("Message received: ")) ; MONITOR(println((char*)packet_data)) ;
-        MONITOR(printf("Packet type: %02X\r\n", packet_type)) ;
+        switch(packet_type) {
+            case PROTOCOL_PACKET_TYPE_EMPTY: {
+                MONITOR(println("TX done?)")) ;
+                break ;
+            }
+            case PROTOCOL_PACKET_TYPE_FROM_CTXLINK: {
+                uint8_t *tx_buffer = get_next_spi_buffer() ;
+                //
+                // Print the message for now
+                //
+                MONITOR(print("Message received: ")) ; MONITOR(println((char*)packet_data)) ;
+                MONITOR(printf("Packet type: %02X\r\n", packet_type)) ;
+                //
+                // Send a test reply to the packet received
+                //
+                memset(tx_buffer, 0x00, SPI_BUFFER_SIZE) ; // Clear the buffer
+                memcpy(tx_buffer, "Goodbye ctxLink", 15) ; // Copy the message to the buffer
+                package_data(tx_buffer, 15, PROTOCOL_PACKET_TYPE_TO_CTXLINK, SPI_BUFFER_SIZE) ; // Package the data
+                spi_create_pending_transaction(tx_buffer, NULL, true) ; // This is a pending tx transaction
+                break ;
+            }
+            case PROTOCOL_PACKET_TYPE_TO_CTXLINK: {
+                MONITOR(println("Network to ctxLink")) ;
+                spi_save_tx_transaction_buffer(message) ; // Save the transaction buffer for SPI driver
+                break ;
+            }
+            default: {
+
+                MONITOR(println("Unknown packet type")) ;
+                break ;
+            }
+        }
     }
+
 }

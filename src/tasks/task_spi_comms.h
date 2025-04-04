@@ -19,5 +19,5 @@
 extern QueueHandle_t spi_comms_queue ;
 
 void task_spi_comms(void *pvParameters) ;
-
+uint8_t *get_next_spi_buffer(void) ;
 #endif // TASK_SPI_COMMS_H
