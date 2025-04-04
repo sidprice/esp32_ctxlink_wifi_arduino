@@ -42,16 +42,26 @@ void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg
     // If the ATTN port was asserted, this is a tx completion, otherwise
     // if is an rx completion. Send appropriate buffer pointer.
     //
-    uint8_t *data = (is_tx == true) ? (uint8_t*)trans->tx_buffer : (uint8_t *)trans->rx_buffer ;
+    MONITOR(println("Post Transaction"));
+    if ( is_tx ) 
+      digitalWrite(ATTN, HIGH) ; // Set ATTN line high to indicate data is not ready to be read by ctxLink
+    uint8_t *data = (is_tx == true) ? (uint8_t *)empty_response : (uint8_t *)trans->rx_buffer ;
     xQueueSendFromISR(spi_comms_queue,&data, NULL);
 }
 
 void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans, void *arg)
 {
+  MONITOR(println("Post Setup")) ;
     // NOTE: here is an ISR Context
     //       there are significant limitations on what can be done with ISRs,
     //       so use this feature carefully!
-
+    //
+    // If the new transaction is a transmission, assert ATTN
+    //
+    if ( is_tx ) {
+      MONITOR(println("TX operation")) ;
+      digitalWrite(ATTN, LOW) ; // Set ATTN line low to indicate data is ready to be read by ctxLink
+    }
 }
 
 void spi_ss_activated(void) {
@@ -65,6 +75,14 @@ void spi_ss_activated(void) {
  * 
  */
 void initCtxLink(void) {
+  // Set up the GPIO pins for ctxLink
+  digitalWrite(nREADY, HIGH) ; // Set nREADY line high to indicate ESP32 is not ready
+  pinMode(nREADY, OUTPUT); // Set nREADY line to output
+  digitalWrite(ATTN, HIGH) ; // Set ATTN line high to indicate ESP32 has no data
+  pinMode(ATTN, OUTPUT); // Set ATTN line to output
+  digitalWrite(SS, HIGH) ;
+  pinMode(SS, INPUT_PULLUP); // Set SS line to input with pullup
+  attachInterrupt(digitalPinToInterrupt(SS), spi_ss_activated, FALLING); // Attach interrupt to SS line
   slave.setDataMode(SPI_MODE1);
   slave.setMaxTransferSize(BUFFER_SIZE);  // default: 4092 bytes
   slave.setQueueSize(QUEUE_SIZE);         // default: 1
@@ -73,6 +91,11 @@ void initCtxLink(void) {
   slave.begin();  // default: HSPI (please refer README for pin assignments)
   slave.setUserPostSetupCbAndArg(userTransactionCallback, NULL);
   slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
+  //
+  // Tell ctxLink we are ready
+  //
+  // TODO Figure out when esp32 is REALLY ready
+  digitalWrite(nREADY, LOW) ; // Set nREADY line high to indicate ESP32 is ready
 }
 
 /**
