@@ -34,14 +34,14 @@ static constexpr size_t PACKET_HEADER_SIZE = PACKET_HEADER_DATA_START;  // Size 
  *      Byte (n-1)+5    : Last data byte
  * 
  */
-size_t package_data(uint8_t * buffer, size_t data_length, size_t buffer_size) {
+size_t package_data(uint8_t * buffer, size_t data_length, protocol_packet_type_e data_type, size_t buffer_size) {
     memmove(buffer + PACKET_HEADER_DATA_START, buffer, data_length);  // Move the data to start 3 bytes in
 
     size_t packet_length = data_length + PACKET_HEADER_SIZE;  // Total packet length
     size_t padding = packet_length % 4;  // Calculate padding to make the total size a multiple of 4 
     buffer[PACKET_HEADER_MAGIC1] = PROTOCOL_MAGIC1;  // First byte of magic number
     buffer[PACKET_HEADER_MAGIC2] = PROTOCOL_MAGIC2;  // Second byte of magic number
-    buffer[PACKET_HEADER_SOURCE_ID] = 0x01;  // Message source identifier (e.g. 0x01 for GDB)
+    buffer[PACKET_HEADER_SOURCE_ID] = data_type;  // Message source identifier
     buffer[PACKET_HEADER_LENGTH_MSB] = (data_length >> 8) & 0xFF;  // High byte of data length
     buffer[PACKET_HEADER_LENGTH_LSB] = data_length & 0xFF;         // Low byte of data length
     if (padding > 0) {

@@ -13,4 +13,6 @@
  #define TASK_SERVER_H
 
 void task_wifi_server(void *pvParameters) ;
- #endif
+constexpr uint8_t MAGIC_HI = 0xbe ;
+constexpr uint8_t MAGIC_LO = 0xef ;
+#endif
