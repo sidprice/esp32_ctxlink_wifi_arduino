@@ -63,17 +63,19 @@ constexpr uint8_t PROTOCOL_MAGIC1 = 0xDE ; // First byte of the magic number
 constexpr uint8_t PROTOCOL_MAGIC2 = 0xAD ; // Second byte of the magic number
 
 typedef enum {
-    PROTOCOL_PACKET_TYPE_CMD = 0x00,        // Command from ctxLink
-    Protocol_PACKET_TYPE_STATUS,            // 0x01 Status of ESP32 to ctxLink
-    PROTOCOL_PACKET_TYPE_FROM_GDB,          // 0x02 Packet from GDB
-    PROTOCOL_PACKET_TYPE_TO_GDB,            // 0x03 Packet to GDB
-    PROTOCOL_PACKET_TYPE_FROM_CTXLINK,      // 0x04 Packet from ctxLink
-    PROTOCOL_PACKET_TYPE_TO_CTXLINK,        // 0x05 Packet to ctxLink
-    PROTOCOL_PACKET_TYPE_SWO,               // 0x06 SWO packet type - to network
-    PROTOCOL_PACKET_TYPE_UART_FROM_CTXLINK, // 0x07 UART packet from ctxLink
-    PROTOCOL_PACKET_TYPE_UART_TO_CTXLINK    // 0x08 UART packet to ctxLink
+    PROTOCOL_PACKET_TYPE_EMPTY = 0x00,      // 0x00 Empty packet type 
+    PROTOCOL_PACKET_TYPE_CMD,               // 0x01 Command from ctxLink
+    Protocol_PACKET_TYPE_STATUS,            // 0x02 Status of ESP32 to ctxLink
+    PROTOCOL_PACKET_TYPE_FROM_GDB,          // 0x03 Packet from GDB
+    PROTOCOL_PACKET_TYPE_TO_GDB,            // 0x04 Packet to GDB
+    PROTOCOL_PACKET_TYPE_FROM_CTXLINK,      // 0x05 Packet from ctxLink
+    PROTOCOL_PACKET_TYPE_TO_CTXLINK,        // 0x06 Packet to ctxLink
+    PROTOCOL_PACKET_TYPE_SWO,               // 0x07 SWO packet type - to network
+    PROTOCOL_PACKET_TYPE_UART_FROM_CTXLINK, // 0x08 UART packet from ctxLink
+    PROTOCOL_PACKET_TYPE_UART_TO_CTXLINK,   // 0x09 UART packet to ctxLink
+    PROTOCOL_PACKET_CS_ACTIVATED            // 0x0a CS line activated by ctxLink
 } protocol_packet_type_e;
 
-size_t package_data(uint8_t * buffer, size_t data_length, size_t buffer_size);
+size_t package_data(uint8_t * buffer, size_t data_length, protocol_packet_type_e data_type, size_t buffer_size);
 void protocol_split(uint8_t *message, size_t *packet_size, protocol_packet_type_e *packet_type, uint8_t **data) ;
 #endif // PROTOCOL_H
