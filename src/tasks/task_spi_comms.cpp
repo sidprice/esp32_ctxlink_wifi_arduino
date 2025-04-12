@@ -18,6 +18,7 @@
 #include "driver/spi_slave.h"
 #include "ctxlink.h"
 #include "protocol.h"
+#include "tasks/task_server.h"
 
 #define SPI_BUFFER_SIZE 1024
 #define SPI_BUFFER_COUNT 8
@@ -114,7 +115,8 @@ void task_spi_comms(void *pvParameters) {
         size_t packet_size ;
         protocol_packet_type_e packet_type ;
         uint8_t *packet_data ;
-        protocol_split(message, &packet_size, &packet_type, &packet_data) ;
+        uint32_t message_length ;
+        protocol_split(message, &packet_size, &packet_type, &packet_data, &message_length) ;
         switch(packet_type) {
             case PROTOCOL_PACKET_TYPE_EMPTY: {
                 MONITOR(println("TX done?)")) ;
@@ -128,12 +130,11 @@ void task_spi_comms(void *pvParameters) {
                 MONITOR(print("Message received: ")) ; MONITOR(println((char*)packet_data)) ;
                 MONITOR(printf("Packet type: %02X\r\n", packet_type)) ;
                 //
-                // Send a test reply to the packet received
+                // Send the packet to the server task
                 //
-                memset(tx_buffer, 0x00, SPI_BUFFER_SIZE) ; // Clear the buffer
-                memcpy(tx_buffer, "Goodbye ctxLink", 15) ; // Copy the message to the buffer
-                package_data(tx_buffer, 15, PROTOCOL_PACKET_TYPE_TO_CTXLINK, SPI_BUFFER_SIZE) ; // Package the data
-                spi_create_pending_transaction(tx_buffer, NULL, true) ; // This is a pending tx transaction
+                // TODO Need to check if there is a client attached to GDB server
+                //
+                xQueueSend(gdb_server_queue, &message, portMAX_DELAY) ; // Send the message to the gdb server task
                 break ;
             }
             case PROTOCOL_PACKET_TYPE_TO_CTXLINK: {
