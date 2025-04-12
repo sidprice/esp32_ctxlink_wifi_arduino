@@ -17,7 +17,7 @@
   * 
   * Comment the following line to turn off all serial output
   */
- #define SERIAL_ON
+ // #define SERIAL_ON
  
  /**
   * @brief The following macros enable/disable serial output
