@@ -23,6 +23,10 @@
 char net_input_buffer[1024] ;   // Data received from network
 char from_ctxlink_buffer[1024] ;
 
+QueueHandle_t gdb_server_queue ;
+
+constexpr uint32_t gdb_server_queue_length = 4 ;
+
 /**
  * @brief Task to handle the GDB Wi-Fi server
  * 
@@ -31,6 +35,8 @@ char from_ctxlink_buffer[1024] ;
 void task_wifi_server(void *pvParameters) {
     int server_fd, client_fd;
     struct sockaddr_in server_addr, client_addr;
+
+    gdb_server_queue = xQueueCreate(gdb_server_queue_length, sizeof(uint8_t *)) ; // Create the queue for the GDB server task
     socklen_t addr_len = sizeof(client_addr);
 
     in_port_t port = (in_port_t)((uint32_t)pvParameters);   // Recover the port number for this task
@@ -72,10 +78,29 @@ void task_wifi_server(void *pvParameters) {
                 return;
             } 
             MONITOR(println("Client connected"));
+            // Set the client socket to non-blocking mode
+            int flags = fcntl(client_fd, F_GETFL, 0);
+            fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
             //
             //  Server data handling loop
             //
             while(true) {
+                BaseType_t result ;
+                uint8_t *message ;
+                //
+                // Check for packets from SPI task
+                //
+                result = xQueueReceive(gdb_server_queue, &message, 0) ;  // Do not block here
+                if (result == pdTRUE) {
+                    size_t packet_size ;
+                    protocol_packet_type_e packet_type ;
+                    uint8_t *packet_data ;
+                    uint32_t message_length ;
+                    MONITOR(print("packet_type: ")) ; MONITOR(println(packet_type)) ;
+                    MONITOR(print("packet_size: ")) ; MONITOR(println(packet_size)) ; 
+                    protocol_split(message, &packet_size, &packet_type, &packet_data, &message_length) ;
+                    send(client_fd, message, packet_size, 0); // Send the data to the client
+                }
                 int bytes_received = read(client_fd, &net_input_buffer, sizeof(net_input_buffer));
                 if (bytes_received > 0 ) {
                     MONITOR(print("Bytes received: ")) ; MONITOR(println(bytes_received)) ;
@@ -89,11 +114,25 @@ void task_wifi_server(void *pvParameters) {
                     package_data((uint8_t *)net_input_buffer, bytes_received, PROTOCOL_PACKET_TYPE_TO_CTXLINK, sizeof(net_input_buffer)) ; // Package the data for ctxLink
                     uint8_t *input_message = (uint8_t *)net_input_buffer ; // Cast the buffer to a uint8_t pointer
                     xQueueSend(spi_comms_queue, &input_message, 0) ; // Send the data to the SPI task
-                } else {
+                } else if (bytes_received == 0) {
                     MONITOR(println("Client disconnected"));
                     close(client_fd);
                     break;
+                } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    // No data available, continue the loop
+                    vTaskDelay(10 / portTICK_PERIOD_MS); // Yield to other tasks
+                }  else if (errno == ECONNRESET) {
+                    MONITOR(println("Client disconnected abruptly (ECONNRESET)"));
+                    close(client_fd);
+                    break;
+                } else {
+                    MONITOR(print("Socket read failed: ")); MONITOR(println(errno));
+                    close(client_fd);
+                    break;
                 }
+                //
+                // Check if there is data from the SPI task to send to client
+                //
             }
         }
             
