@@ -21,6 +21,7 @@
 #include "tasks/task_spi_comms.h"
 
 static const uint8_t nREADY = 8 ; // GPIO pin for ctxLink nReady input
+static const uint8_t nSPI_READY = 7 ; // GPIO pin for ctxLink SPI ready input
 
 static bool is_tx = false ;
 
@@ -61,8 +62,10 @@ void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg
     // If the ATTN port was asserted, this is a tx completion, otherwise
     // if is an rx completion. Send appropriate buffer pointer.
     //
-    if ( is_tx ) 
+    if ( is_tx ) {
       digitalWrite(ATTN, HIGH) ; // Set ATTN line high to indicate data is not ready to be read by ctxLink
+      digitalWrite(nSPI_READY, HIGH) ; // Set nSPI_READY line high to indicate ESP32 SPI Transfer is not ready
+    }
     uint8_t *data = (is_tx == true) ? (uint8_t *)empty_response : (uint8_t *)trans->rx_buffer ;
     xQueueSendFromISR(spi_comms_queue,&data, NULL);
 }
@@ -75,7 +78,7 @@ void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg
  */
 void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans, void *arg)
 {
-  digitalWrite(nREADY,LOW) ;    // Tell ctxLink the transaction is ready to go.
+  digitalWrite(nSPI_READY,LOW) ;    // Tell ctxLink the transaction is ready to go.
 }
 
 /**
@@ -103,6 +106,8 @@ void initCtxLink(void) {
   // Set up the GPIO pins for ctxLink
   digitalWrite(nREADY, HIGH) ; // Set nREADY line high to indicate ESP32 is not ready
   pinMode(nREADY, OUTPUT); // Set nREADY line to output
+  digitalWrite(nSPI_READY, HIGH) ; // Set nSPI_READY line high to indicate ESP32 SPI Transfer is not ready
+  pinMode(nSPI_READY, OUTPUT); // Set nSPI_READY line to output
   digitalWrite(ATTN, HIGH) ; // Set ATTN line high to indicate ESP32 has no data
   pinMode(ATTN, OUTPUT); // Set ATTN line to output
   digitalWrite(SS, HIGH) ;
