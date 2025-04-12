@@ -12,6 +12,8 @@
  #ifndef TASK_SERVER_H
  #define TASK_SERVER_H
 
+extern QueueHandle_t gdb_server_queue ;
+
 void task_wifi_server(void *pvParameters) ;
 constexpr uint8_t MAGIC_HI = 0xbe ;
 constexpr uint8_t MAGIC_LO = 0xef ;
