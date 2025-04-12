@@ -77,5 +77,5 @@ typedef enum {
 } protocol_packet_type_e;
 
 size_t package_data(uint8_t * buffer, size_t data_length, protocol_packet_type_e data_type, size_t buffer_size);
-void protocol_split(uint8_t *message, size_t *packet_size, protocol_packet_type_e *packet_type, uint8_t **data) ;
+void protocol_split(uint8_t *message, size_t *packet_size, protocol_packet_type_e *packet_type, uint8_t **data, uint32_t *message_length) ;
 #endif // PROTOCOL_H

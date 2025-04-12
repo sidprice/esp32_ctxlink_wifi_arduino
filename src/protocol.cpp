@@ -59,8 +59,9 @@ size_t package_data(uint8_t * buffer, size_t data_length, protocol_packet_type_e
  * @param packet_type   Pointer to a register to receive the packet type
  * @param data          Pointer to a register to receive the pointer to the packet data content
  */
-void protocol_split(uint8_t *message, size_t *packet_size, protocol_packet_type_e *packet_type, uint8_t **data) {
+void protocol_split(uint8_t *message, size_t *packet_size, protocol_packet_type_e *packet_type, uint8_t **data, uint32_t *message_length) {
     *packet_size = (message[PACKET_HEADER_LENGTH_MSB] << 8) | message[PACKET_HEADER_LENGTH_LSB];  // Get the packet size
     *packet_type = (protocol_packet_type_e)message[PACKET_HEADER_SOURCE_ID];  // Get the packet type
     *data = message + PACKET_HEADER_DATA_START;  // Get the data pointer
+    *message_length = *packet_size - PACKET_HEADER_SIZE;  // Get the message length
 }
