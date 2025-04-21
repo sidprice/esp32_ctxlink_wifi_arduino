@@ -12,30 +12,35 @@
 #include <Arduino.h>
 
 #include "serial_control.h"
-#include "wifi_station.h"
 #include "ota.h"
 #include "ctxlink.h"
-#include "tasks/task_server.h"
 #include "tasks/task_spi_comms.h"
+#include "tasks/task_wifi.h"
 
 void setup() {
-  MONITOR(begin(115200));
+//   MONITOR(begin(115200));
 
-#ifdef SERIAL_ON
+// #ifdef SERIAL_ON
+//   while (!Serial)
+//     delay(10);     // will pause Zero, Leonardo, etc until serial console opens
+// #endif
+  Serial.begin(115200);
+
   while (!Serial)
     delay(10);     // will pause Zero, Leonardo, etc until serial console opens
-#endif
+
   MONITOR(println("ctxLink ESP32 WiFi adapter")) ;
   //
   // Set up Wi-Fi connection and monitor status
   //
-  initWiFi() ;
-  ota_setup() ;
-  initCtxLink() ;
-  //
-  // Create the GDB Server task
-  //
-  xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, NULL) ;
+  xTaskCreate(task_wifi, "Wi-Fi", 4096, NULL, 1, NULL) ;
+  // initWiFi() ;
+  // ota_setup() ;
+  // initCtxLink() ;
+  // //
+  // // Create the GDB Server task
+  // //
+  // xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, NULL) ;
   //
   // Create the SPI communications task
   //
@@ -43,7 +48,7 @@ void setup() {
 }
 
 void loop() {
-  timerKick() ;
-  otaKick() ;
+  //  timerKick() ;
+  // otaKick() ;
   delay(1000) ;
 }
