@@ -81,6 +81,8 @@ void task_wifi_server(void *pvParameters) {
             // Set the client socket to non-blocking mode
             int flags = fcntl(client_fd, F_GETFL, 0);
             fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
+            flags = 1;
+            setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags)) ;
             //
             //  Server data handling loop
             //
@@ -95,19 +97,21 @@ void task_wifi_server(void *pvParameters) {
                     size_t packet_size ;
                     protocol_packet_type_e packet_type ;
                     uint8_t *packet_data ;
-                    uint32_t message_length ;
+                    MONITOR(println("Packet from SPI")) ;
+                    protocol_split(message, &packet_size, &packet_type, &packet_data) ;
                     MONITOR(print("packet_type: ")) ; MONITOR(println(packet_type)) ;
                     MONITOR(print("packet_size: ")) ; MONITOR(println(packet_size)) ; 
-                    protocol_split(message, &packet_size, &packet_type, &packet_data, &message_length) ;
-                    send(client_fd, message, packet_size, 0); // Send the data to the client
+                    MONITOR(print("message: ")) ; MONITOR(println((char *)packet_data)) ;
+                    Serial.println("packet to gdb") ;
+                    send(client_fd, packet_data, packet_size, 0); // Send the data to the client
                 }
                 int bytes_received = read(client_fd, &net_input_buffer, sizeof(net_input_buffer));
                 if (bytes_received > 0 ) {
-                    MONITOR(print("Bytes received: ")) ; MONITOR(println(bytes_received)) ;
-                    for (int i = 0; i < bytes_received; i++) {
-                        MONITOR(print(net_input_buffer[i])) ;
-                    }
-                    MONITOR(println()) ;
+                    // MONITOR(print("Bytes received: ")) ; MONITOR(println(bytes_received)) ;
+                    // for (int i = 0; i < bytes_received; i++) {
+                    //     MONITOR(print(net_input_buffer[i])) ;
+                    // }
+                    // MONITOR(println()) ;
                     //
                     // Send input to the SPI task for forwarding to ctxLink
                     //
