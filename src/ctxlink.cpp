@@ -27,7 +27,7 @@ static bool is_tx = false ;
 
 ESP32DMASPI::Slave slave;
 
-static constexpr size_t BUFFER_SIZE = 1024; // should be multiple of 4
+static constexpr size_t BUFFER_SIZE = 2000; // should be multiple of 4
 static constexpr size_t QUEUE_SIZE = 1;
 
 static constexpr uint8_t empty_response[] = {0x00, 0x00, 0x00, 0x00}; // sent to spi task after transmission is done
@@ -44,7 +44,7 @@ static uint8_t  *tx_saved_transaction ;
  */
 void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer) {
   tx_saved_transaction = transaction_buffer ;
-  digitalWrite(nREADY, HIGH) ;    // Will be asserted once the transaction is set up
+  // digitalWrite(nREADY, HIGH) ;    // Will be asserted once the transaction is set up
   digitalWrite(ATTN, LOW) ;
 }
 
@@ -56,18 +56,12 @@ void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer) {
  */
 void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg)
 {
-    //
-    // Send a message to the SPI task, data transaction is completed.
-    //
-    // If the ATTN port was asserted, this is a tx completion, otherwise
-    // if is an rx completion. Send appropriate buffer pointer.
-    //
-    if ( is_tx ) {
-      digitalWrite(ATTN, HIGH) ; // Set ATTN line high to indicate data is not ready to be read by ctxLink
-      digitalWrite(nSPI_READY, HIGH) ; // Set nSPI_READY line high to indicate ESP32 SPI Transfer is not ready
-    }
-    uint8_t *data = (is_tx == true) ? (uint8_t *)empty_response : (uint8_t *)trans->rx_buffer ;
-    xQueueSendFromISR(spi_comms_queue,&data, NULL);
+  digitalWrite(ATTN, HIGH) ; // Set ATTN line high to indicate data is not ready to be read by ctxLink
+  digitalWrite(nSPI_READY, HIGH) ; // Set nSPI_READY line high to indicate ESP32 SPI Transfer is not ready
+  //
+  if ( is_tx  == false) {
+      xQueueSendFromISR(spi_comms_queue,(uint8_t *)&trans->rx_buffer, NULL);
+  }
 }
 
 /**
@@ -86,15 +80,21 @@ void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans, void *arg)
  * 
  *  If ATTN is asserted, set up a TX transaction using the saved txtransaction packet.
  * 
- *  Otherwise, do nothing.
+ *  Otherwise, set up an RX transaction
+ * 
+ *  Do nothing if ESP32 is not ready!
  */
 void spi_ss_activated(void) {
-  if (digitalRead(ATTN) == LOW) { // Is this a TX transaction?
-    // Set up a transaction to send the saved transaction buffer to ctxLink
-    spi_create_pending_transaction(tx_saved_transaction, NULL, true) ; // This is a pending tx transaction
-  } else {
-    // Set up a transaction to receive data from ctxLink
-    spi_create_pending_transaction(NULL, get_next_spi_buffer(), false) ; // This is a pending rx transaction
+  if ( digitalRead(nREADY) == LOW ) {
+    if (digitalRead(ATTN) == LOW) { // Is this a TX transaction?
+      // Set up a transaction to send the saved transaction buffer to ctxLink
+      MONITOR(println("SS activated tx")) ;
+      spi_create_pending_transaction(tx_saved_transaction, NULL, true) ; // This is a pending tx transaction
+    } else {
+      // Set up a transaction to receive data from ctxLink
+      MONITOR(println("SS activated rx")) ;
+      spi_create_pending_transaction(NULL, get_next_spi_buffer(), false) ; // This is a pending rx transaction
+    }
   }
 }
 
@@ -125,7 +125,7 @@ void initCtxLink(void) {
   // Tell ctxLink we are ready
   //
   // TODO Figure out when esp32 is REALLY ready
-  digitalWrite(nREADY, LOW) ; // Set nREADY line high to indicate ESP32 is ready
+  digitalWrite(nREADY, LOW) ; // Set nREADY line low to indicate ESP32 is ready
 }
 
 /**
