@@ -20,7 +20,7 @@
 #include "protocol.h"
 #include "tasks/task_server.h"
 
-#define SPI_BUFFER_SIZE 1024
+#define SPI_BUFFER_SIZE 2000
 #define SPI_BUFFER_COUNT 8
 
 static bool tx_inflight = false ;
@@ -106,7 +106,7 @@ void task_spi_comms(void *pvParameters) {
     // spi_create_pending_transaction(NULL, get_next_spi_buffer(), false) ; // This is a pending rx transaction
 
     while(true) {
-        MONITOR(println("SPI Task Loop Start")) ;
+        // MONITOR(println("SPI Task Loop Start")) ;
         // Wait for a message from the other tasks or spi driver
         xQueueReceive(spi_comms_queue, &message, portMAX_DELAY) ;
         //
@@ -115,25 +115,28 @@ void task_spi_comms(void *pvParameters) {
         size_t packet_size ;
         protocol_packet_type_e packet_type ;
         uint8_t *packet_data ;
-        uint32_t message_length ;
-        protocol_split(message, &packet_size, &packet_type, &packet_data, &message_length) ;
+        protocol_split(message, &packet_size, &packet_type, &packet_data) ;
+        // Serial.print("packet_type: ") ; Serial.println(packet_type) ;
+        // Serial.print("packet_size: ") ; Serial.println(packet_size) ;
+        // Serial.print("message: ") ; Serial.println((char *)packet_data) ;
+        //
         switch(packet_type) {
             case PROTOCOL_PACKET_TYPE_EMPTY: {
                 MONITOR(println("TX done?)")) ;
                 break ;
             }
-            case PROTOCOL_PACKET_TYPE_FROM_CTXLINK: {
-                uint8_t *tx_buffer = get_next_spi_buffer() ;
+            case PROTOCOL_PACKET_TYPE_TO_GDB: {
                 //
                 // Print the message for now
                 //
-                MONITOR(print("Message received: ")) ; MONITOR(println((char*)packet_data)) ;
-                MONITOR(printf("Packet type: %02X\r\n", packet_type)) ;
+                // MONITOR(print("Message received: ")) ; MONITOR(println((char*)packet_data)) ;
+                // MONITOR(printf("Packet type: %02X\r\n", packet_type)) ;
                 //
                 // Send the packet to the server task
                 //
                 // TODO Need to check if there is a client attached to GDB server
                 //
+                //Serial.println("packet to gdb server") ;
                 xQueueSend(gdb_server_queue, &message, portMAX_DELAY) ; // Send the message to the gdb server task
                 break ;
             }
@@ -144,7 +147,7 @@ void task_spi_comms(void *pvParameters) {
             }
             default: {
 
-                MONITOR(println("Unknown packet type")) ;
+                MONITOR(print("Unknown packet type -> ")) ; MONITOR(println(packet_type)) ;
                 break ;
             }
         }
