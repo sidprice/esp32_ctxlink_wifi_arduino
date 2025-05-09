@@ -31,20 +31,18 @@ void setup() {
 
   MONITOR(println("ctxLink ESP32 WiFi adapter")) ;
   //
-  // Set up Wi-Fi connection and monitor status
+  // Set up the SPI hardware for ctxLink communication
   //
-  xTaskCreate(task_wifi, "Wi-Fi", 4096, NULL, 1, NULL) ;
-  // initWiFi() ;
-  // ota_setup() ;
-  // initCtxLink() ;
-  // //
-  // // Create the GDB Server task
-  // //
-  // xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, NULL) ;
+  initCtxLink() ;
   //
   // Create the SPI communications task
   //
   xTaskCreate(task_spi_comms, "SPI Comms", 4096, NULL, 1, NULL) ;
+  //
+  // Set up Wi-Fi connection and monitor status
+  //
+  xTaskCreate(task_wifi, "Wi-Fi", 4096, NULL, 1, NULL) ;
+  // ota_setup() ;
 }
 
 void loop() {

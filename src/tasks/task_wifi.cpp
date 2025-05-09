@@ -13,14 +13,23 @@
  #include "serial_control.h"
  #include <WiFi.h>
 
+ #include "protocol.h"
+
  #include "task_wifi.h"
  #include "tasks/task_server.h"
+ #include "task_spi_comms.h"
 
  // Wi-Fi credentials
 // TODO These need to be set from ctxLink and saved in the preferences
 
 const char* ssid = "ctxlink_net";
 const char* password = "pass_phrase";
+
+/**
+ * @brief Structure to hold the information about the current network connection
+ * 
+ */
+static network_connection_info_s network_info ;
 
 // const char* ssid = "Avian Ambassadors";
 // const char* password = "mijo498rocks";
@@ -91,6 +100,35 @@ void deinitWiFi(void) {
                 configWiFi() ; // Attempt to reconnect to Wi-Fi
             } else {
                 MONITOR(println("Wi-Fi connected")) ;
+                //
+                // Update the current network information structure
+                //
+                memset(&network_info, 0, sizeof(network_connection_info_s)) ;
+                strncpy(network_info.network_ssid, ssid, M2M_MAX_SSID_LEN) ;
+                network_info.type = PROTOCOL_PACKET_STATUS_TYPE_NETWORK_CLIENT ;
+                network_info.ip_address[0] = (uint8_t)(WiFi.localIP()[0]) ;
+                network_info.ip_address[1] = (uint8_t)(WiFi.localIP()[1]) ;
+                network_info.ip_address[2] = (uint8_t)(WiFi.localIP()[2]) ;
+                network_info.ip_address[3] = (uint8_t)(WiFi.localIP()[3]) ;
+                network_info.mac_address[0] = (uint8_t)(WiFi.macAddress()[0]) ;
+                network_info.mac_address[1] = (uint8_t)(WiFi.macAddress()[1]) ;
+                network_info.mac_address[2] = (uint8_t)(WiFi.macAddress()[2]) ;
+                network_info.mac_address[3] = (uint8_t)(WiFi.macAddress()[3]) ;
+                network_info.mac_address[4] = (uint8_t)(WiFi.macAddress()[4]) ;
+                network_info.mac_address[5] = (uint8_t)(WiFi.macAddress()[5]) ;
+                network_info.rssi = (int8_t)(WiFi.RSSI()) ;
+                //
+                // uint8_t *message = get_next_spi_buffer() ;
+                // memcpy(message, &network_info, sizeof(network_connection_info_s)) ;
+                // package_data(message, sizeof(network_connection_info_s), PROTOCOL_PACKET_TYPE_NETWORK_INFO, SPI_BUFFER_SIZE) ;
+                //
+                // Send to ctxLink via SPI
+                //
+                vTaskDelay(pdMS_TO_TICKS(500));
+                //xQueueSend(spi_comms_queue, &message, 0) ;
+                //
+                // Start the GDB server task.
+                //
                 xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, &xHandle) ;
             }
         }
