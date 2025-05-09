@@ -150,14 +150,3 @@ void spi_create_pending_transaction(uint8_t *dma_tx_buffer, uint8_t *dma_rx_buff
   slave.trigger();
 }
 
-/**
- * @brief Indicate to ctxLink the ESP32 is ready
- * 
- * Initially this is asserted once a wireless connection is made, however
- * in the future it may need to be asserted in there is no Wi-Fi connection.
- * This would enable ctxLink to configure the Wi-Fi.
- */
-void set_ready(void) {
-  digitalWrite(nREADY, LOW ) ;
-}
-
