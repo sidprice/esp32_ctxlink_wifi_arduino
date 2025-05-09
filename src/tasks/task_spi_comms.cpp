@@ -20,8 +20,9 @@
 #include "protocol.h"
 #include "tasks/task_server.h"
 
-#define SPI_BUFFER_SIZE 2000
-#define SPI_BUFFER_COUNT 8
+#include "debug.h"
+
+#define SPI_BUFFER_COUNT 16
 
 static bool tx_inflight = false;
 

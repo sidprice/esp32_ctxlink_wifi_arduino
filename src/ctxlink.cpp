@@ -17,6 +17,9 @@
 #include "tasks/task_server.h"
 #include "ctxlink.h"
 #include "helper.h"
+
+#include "debug.h"
+
 #include "ESP32DMASPISlave.h"
 #include "tasks/task_spi_comms.h"
 
@@ -44,7 +47,6 @@ static uint8_t  *tx_saved_transaction ;
  */
 void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer) {
   tx_saved_transaction = transaction_buffer ;
-  // digitalWrite(nREADY, HIGH) ;    // Will be asserted once the transaction is set up
   digitalWrite(ATTN, LOW) ;
 }
 
@@ -88,11 +90,9 @@ void spi_ss_activated(void) {
   if ( digitalRead(nREADY) == LOW ) {
     if (digitalRead(ATTN) == LOW) { // Is this a TX transaction?
       // Set up a transaction to send the saved transaction buffer to ctxLink
-      MONITOR(println("SS activated tx")) ;
       spi_create_pending_transaction(tx_saved_transaction, NULL, true) ; // This is a pending tx transaction
     } else {
       // Set up a transaction to receive data from ctxLink
-      MONITOR(println("SS activated rx")) ;
       spi_create_pending_transaction(NULL, get_next_spi_buffer(), false) ; // This is a pending rx transaction
     }
   }
@@ -103,6 +103,14 @@ void spi_ss_activated(void) {
  * 
  */
 void initCtxLink(void) {
+#ifdef DO_TOGGLE_PIN
+  pinMode(PINA, OUTPUT) ; // Set PINA as output
+  pinMode(PINB, OUTPUT) ; // Set PINB as output
+  pinMode(PINC, OUTPUT) ; // Set PINC as output
+  digitalWrite(PINA, LOW) ; // Set PINA low
+  digitalWrite(PINB, LOW) ; // Set PINB low
+  digitalWrite(PINC, LOW) ; // Set PINC low
+#endif
   // Set up the GPIO pins for ctxLink
   digitalWrite(nREADY, HIGH) ; // Set nREADY line high to indicate ESP32 is not ready
   pinMode(nREADY, OUTPUT); // Set nREADY line to output
@@ -125,6 +133,7 @@ void initCtxLink(void) {
   // Tell ctxLink we are ready
   //
   // TODO Figure out when esp32 is REALLY ready
+  MONITOR(println("ctxLink ready")) ;
   digitalWrite(nREADY, LOW) ; // Set nREADY line low to indicate ESP32 is ready
 }
 
