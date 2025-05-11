@@ -76,7 +76,6 @@ void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg
  */
 void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans, void *arg)
 {
-  MONITOR(printf("%02x %02x\n", *(uint8_t *)(trans->tx_buffer), *((uint8_t *)(trans->rx_buffer) + 1)));
   digitalWrite(nSPI_READY, LOW); // Tell ctxLink the transaction is ready to go.
 }
 
