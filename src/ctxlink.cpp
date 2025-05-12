@@ -137,12 +137,6 @@ void initCtxLink(void)
   slave.begin(); // default: HSPI (please refer README for pin assignments)
   slave.setUserPostSetupCbAndArg(userTransactionCallback, NULL);
   slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
-  //
-  // Tell ctxLink we are ready
-  //
-  // TODO Figure out when esp32 is REALLY ready
-  MONITOR(println("ctxLink ready"));
-  digitalWrite(nREADY, LOW); // Set nREADY line low to indicate ESP32 is ready
 }
 
 /**

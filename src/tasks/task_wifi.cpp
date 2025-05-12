@@ -19,6 +19,7 @@
 #include "tasks/task_server.h"
 #include "task_spi_comms.h"
 
+#include "ctxlink.h"
 // Wi-Fi credentials
 // TODO These need to be set from ctxLink and saved in the preferences
 
@@ -145,7 +146,11 @@ void task_wifi(void *pvParameters)
                 //
                 // Send to ctxLink via SPI
                 //
-                vTaskDelay(pdMS_TO_TICKS(500));
+                vTaskDelay(pdMS_TO_TICKS(1));
+                //
+                // Assert ESP32 READY to ensure ctxLink knows
+                //
+                set_ready() ;
                 xQueueSend(spi_comms_queue, &message, 0);
             }
         }
