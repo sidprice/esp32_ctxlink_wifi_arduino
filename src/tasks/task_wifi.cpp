@@ -144,14 +144,11 @@ void task_wifi(void *pvParameters)
                 //
                 xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, &xHandle);
                 //
-                // Send to ctxLink via SPI
-                //
-                vTaskDelay(pdMS_TO_TICKS(1));
-                //
                 // Assert ESP32 READY to ensure ctxLink knows
                 //
-                set_ready() ;
-                xQueueSend(spi_comms_queue, &message, 0);
+                set_ready();
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                xQueueSend(spi_comms_queue, &message, 0);   // Send network information to SPI task
             }
         }
         vTaskDelay(pdMS_TO_TICKS(10000)); // Delay for 10 seconds before checking again
