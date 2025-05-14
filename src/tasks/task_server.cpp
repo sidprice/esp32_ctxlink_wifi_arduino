@@ -96,6 +96,16 @@ void task_wifi_server(void *pvParameters)
             flags = 1;
             setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
             //
+            // Inform ctxLink GDB client connected
+            //
+            protocol_packet_status_s status_packet ;
+            status_packet.type = PROTOCOL_PACKET_STATUS_TYPE_GDB_CLIENT;
+            status_packet.status = 0x01; // 0x01 = connected, 0x00 = disconnected
+            uint8_t *message = get_next_spi_buffer();
+            memcpy(message, &status_packet, sizeof(protocol_packet_status_s));
+            package_data(message, sizeof(protocol_packet_status_s), PROTOCOL_PACKET_TYPE_STATUS);
+            xQueueSend(spi_comms_queue, &message, 0);
+            //
             //  Server data handling loop
             //
             while (true)
@@ -159,9 +169,6 @@ void task_wifi_server(void *pvParameters)
                     close(client_fd);
                     break;
                 }
-                //
-                // Check if there is data from the SPI task to send to client
-                //
             }
         }
     }
