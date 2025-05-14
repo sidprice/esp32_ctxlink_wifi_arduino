@@ -139,6 +139,7 @@ void task_spi_comms(void *pvParameters)
         //
         case PROTOCOL_PACKET_TYPE_NETWORK_INFO:
         case PROTOCOL_PACKET_TYPE_FROM_GDB:
+        case PROTOCOL_PACKET_TYPE_STATUS:
         {
             spi_save_tx_transaction_buffer(message); // Save the transaction buffer for SPI driver
             TOGGLE_PIN(PINB);
