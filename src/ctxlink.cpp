@@ -120,13 +120,13 @@ void initCtxLink(void)
   digitalWrite(PINC, LOW); // Set PINC low
 #endif
   // Set up the GPIO pins for ctxLink
-  digitalWrite(nREADY, HIGH);     // Set nREADY line high to indicate ESP32 is not ready
   pinMode(nREADY, OUTPUT);        // Set nREADY line to output
-  digitalWrite(nSPI_READY, HIGH); // Set nSPI_READY line high to indicate ESP32 SPI Transfer is not ready
+  digitalWrite(nREADY, HIGH);     // Set nREADY line high to indicate ESP32 is not ready
   pinMode(nSPI_READY, OUTPUT);    // Set nSPI_READY line to output
-  digitalWrite(ATTN, HIGH);       // Set ATTN line high to indicate ESP32 has no data
+  digitalWrite(nSPI_READY, HIGH); // Set nSPI_READY line high to indicate ESP32 SPI Transfer is not ready
   pinMode(ATTN, OUTPUT);          // Set ATTN line to output
-  digitalWrite(SS, HIGH);
+  digitalWrite(ATTN, HIGH);       // Set ATTN line high to indicate ESP32 has no data
+  // digitalWrite(SS, HIGH);
   pinMode(SS, INPUT_PULLUP);                                             // Set SS line to input with pullup
   attachInterrupt(digitalPinToInterrupt(SS), spi_ss_activated, FALLING); // Attach interrupt to SS line
   slave.setDataMode(SPI_MODE1);
