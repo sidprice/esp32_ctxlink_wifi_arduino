@@ -45,6 +45,5 @@ void setup() {
 }
 
 void loop() {
-  //  timerKick() ;
   delay(1000) ;
 }
