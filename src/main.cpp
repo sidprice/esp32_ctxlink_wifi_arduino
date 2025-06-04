@@ -42,11 +42,9 @@ void setup() {
   // Set up Wi-Fi connection and monitor status
   //
   xTaskCreate(task_wifi, "Wi-Fi", 4096, NULL, 1, NULL) ;
-  // ota_setup() ;
 }
 
 void loop() {
   //  timerKick() ;
-  // otaKick() ;
   delay(1000) ;
 }
