@@ -123,8 +123,22 @@ void task_wifi_server(void *pvParameters)
                     protocol_packet_type_e packet_type;
                     uint8_t *packet_data;
                     protocol_split(message, &packet_size, &packet_type, &packet_data);
-                    // MONITOR(println((char *)packet_data));
-                    send(client_fd, packet_data, packet_size, 0);
+                    // MONITOR(println("%d bytes to GDB", packet_size));
+                    // MONITOR(print("Sending to GDB: ")); MONITOR(println(packet_size));
+
+                    while(packet_size > 0)
+                    {
+                        bytes_sent = send(client_fd, packet_data, packet_size, 0);
+                        if (bytes_sent < 0)
+                        {
+                            MONITOR(print("Socket send failed: "));
+                            MONITOR(println(errno));
+                            break;
+                        }
+                        packet_size -= bytes_sent;
+                        packet_data += bytes_sent;
+                    }
+                    // send(client_fd, packet_data, packet_size, 0);
                 }
                 int bytes_received = read(client_fd, &net_input_buffer, sizeof(net_input_buffer));
                 if (bytes_received > 0)
