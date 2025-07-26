@@ -123,7 +123,7 @@ void task_wifi(void *pvParameters)
                 // Update the current network information structure
                 //
                 memset(&network_info, 0, sizeof(network_connection_info_s));
-                strncpy(network_info.network_ssid, ssid, M2M_MAX_SSID_LEN);
+                strncpy(network_info.network_ssid, ssid, MAX_SSID_LENGTH);
                 network_info.type = PROTOCOL_PACKET_STATUS_TYPE_NETWORK_CLIENT;
                 network_info.connected = 0x01; // 0x01 = connected, 0x00 = disconnected
                 network_info.ip_address[0] = (uint8_t)(WiFi.localIP()[0]);
