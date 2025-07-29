@@ -14,6 +14,8 @@
 #include "serial_control.h"
 #include "ota.h"
 #include "ctxlink.h"
+#include "ctxlink_preferences.h"
+
 #include "tasks/task_spi_comms.h"
 #include "tasks/task_wifi.h"
 
@@ -34,6 +36,10 @@ void setup() {
   // Set up the SPI hardware for ctxLink communication
   //
   initCtxLink() ;
+  //
+  // Instantiate the preferences instance
+  //
+  preferences_init() ;
   //
   // Create the SPI communications task
   //
