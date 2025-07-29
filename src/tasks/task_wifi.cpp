@@ -14,6 +14,7 @@
 #include <WiFi.h>
 
 #include "protocol.h"
+#include "ctxlink_preferences.h"
 
 #include "task_wifi.h"
 #include "tasks/task_server.h"
@@ -23,8 +24,10 @@
 // Wi-Fi credentials
 // TODO These need to be set from ctxLink and saved in the preferences
 
-const char *ssid = "ctxlink_net";
-const char *password = "pass_phrase";
+static char ssid[MAX_SSID_LENGTH] {0} ;
+static char password[MAX_PASS_PHRASE_LENGTH] = {0} ;
+
+/**
 
 /**
  * @brief Structure to hold the information about the current network connection
@@ -90,6 +93,9 @@ void task_wifi(void *pvParameters)
 {
     (void)pvParameters; // Unused parameter
     TaskHandle_t xHandle = NULL;
+    size_t settings_count = preferences_get_wifi_parameters(ssid,password) ;
+    MONITOR(print("SSID: ")); MONITOR(println((char*)ssid));
+    MONITOR(print("Passphrase: ")); MONITOR(println((char*)password));
     configWiFi(); // Attempt to connect to Wi-Fi
     while (1)
     {
