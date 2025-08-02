@@ -28,6 +28,17 @@ static char ssid[MAX_SSID_LENGTH] {0} ;
 static char password[MAX_PASS_PHRASE_LENGTH] = {0} ;
 
 /**
+ * @brief Define the polling period for the Wi-Fi connection state
+ * 
+ */
+ const size_t wifi_state_poll_period = 10000 ; // Expressed in milliseconds
+
+ /**
+  * @brief The current Wi-Fi status 
+  * 
+  */
+wl_status_t wifi_status = WL_NO_SHIELD;
+
 
 /**
  * @brief Structure to hold the information about the current network connection
@@ -38,17 +49,66 @@ static network_connection_info_s network_info;
 // const char* ssid = "Avian Ambassadors";
 // const char* password = "mijo498rocks";
 
-void deinitWiFi(void)
+/**
+ * @brief This is the depth of the WIFI task messaging queue
+ *
+ */
+constexpr uint32_t wifi_comms_queue_length = 4;
+
+/**
+ * @brief The Wi-Fi task message queue
+ *
+ * This queue is used to send messages between the other tasks and the Wi-Fi task.
+ */
+QueueHandle_t wifi_comms_queue;
+
+/**
+ * @brief Handle Wi-Fi events
+ * 
+ */
+void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
+    MON_PRINTF("Wi-Fi event: %d\r\n", event);
+    xTaskNotifyGive(wifi_task_handle);
+}
+
+/**
+ * @brief Handle the Wi-Fi disconnect event
+ * 
+ * @param event The Wi-Fi event type
+ * @param info The Wi-Fi event information
+ * 
+ */
+void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+    MON_NL("#1");
+    xTaskNotifyGive(wifi_task_handle);
+}
+
+/**
+ * @brief Handle the Wi-Fi connect   event
+ * 
+ * @param event The Wi-Fi event type
+ * @param info The Wi-Fi event information
+ * 
+ */
+void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+    MON_NL("#3");
+}
+
+void disconnect_wifi(void)
 {
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
+    if (WiFi.status() == WL_CONNECTED) {
+        MON_NL("Disconnecting Wi-Fi");
+        WiFi.disconnect(true) ;
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Wait completed disconnect
+        MON_NL("#2");
+    }
 } // deinitWiFi() end
 
 wl_status_t configWiFi(void)
 {
     wl_status_t wifi_status;
-    MONITOR(println("Configuring Wi-Fi"));
-    deinitWiFi();
+    MON_NL("Configuring Wi-Fi");
+    disconnect_wifi();
     delay(100);
     //
     // Set up the Wi-Fi Station
@@ -56,13 +116,13 @@ wl_status_t configWiFi(void)
     // TODO Set the hostname to something unique
     //
     WiFi.setHostname("ctxLink_adapter_1");
-    MONITOR(print("Hostname = "));
-    Serial.println(WiFi.getHostname());
-    MONITOR(print("Connecting to WiFi .."));
+    MON_PRINTF("Hostname = %s\r\n", WiFi.getHostname());
+    MON("Connecting to WiFi ..");
 
     uint32_t retry = 5;
 
     wifi_status = WiFi.begin(ssid, password);
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Wait completed connect
     do
     {
         wifi_status = WiFi.status();
@@ -71,20 +131,18 @@ wl_status_t configWiFi(void)
             break;
         }
         delay(1000);
-        MONITOR(print("."));
+        MON(".");
     } while (retry--);
-    MONITOR(println());
+    MON("\r\n");
     if (wifi_status == WL_CONNECTED)
     {
-        MONITOR(println(WiFi.localIP()));
-        MONITOR(print("RSSI: "));
-        MONITOR(println(WiFi.RSSI()));
+        MON_PRINTF("IP Address: %s\r\n", WiFi.localIP().toString().c_str());
+        MON_PRINTF("RSSI: %d\r\n", WiFi.RSSI());
     }
     else
     {
-        MONITOR(print("Wi-Fi status = "));
-        MONITOR(println(wifi_status));
-        MONITOR(println("Failed to connect to Wi-Fi"));
+        MON_PRINTF("Wi-Fi status = %d\r\n", wifi_status);
+        MON_NL("Failed to connect to Wi-Fi");
     }
     return wifi_status;
 } // configWiFi() end
@@ -92,10 +150,20 @@ wl_status_t configWiFi(void)
 void task_wifi(void *pvParameters)
 {
     (void)pvParameters; // Unused parameter
+    BaseType_t result ;
+    static uint8_t *message;
     TaskHandle_t xHandle = NULL;
+    //
+    wifi_comms_queue = xQueueCreate(wifi_comms_queue_length, sizeof(uint8_t *)); // Create the queue for the SPI task
+    //
+    // Get the wi-fi settings from preferences
+    //
     size_t settings_count = preferences_get_wifi_parameters(ssid,password) ;
-    MONITOR(print("SSID: ")); MONITOR(println((char*)ssid));
-    MONITOR(print("Passphrase: ")); MONITOR(println((char*)password));
+    MON_PRINTF("SSID: %s\r\n", (char*)ssid);
+    MON_PRINTF("Passphrase: %s\r\n", (char*)password);
+    WiFi.onEvent(onWiFiDisconnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+    WiFi.onEvent(onWiFiConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
+    WiFi.onEvent(onWiFiEvent, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
     configWiFi(); // Attempt to connect to Wi-Fi
     while (1)
     {
@@ -106,8 +174,7 @@ void task_wifi(void *pvParameters)
         //
         if (wifi_status != previous_status)
         {
-            MONITOR(print("Wi-Fi status = "));
-            MONITOR(println(wifi_status));
+            MON_PRINTF("Wi-Fi status = %d\r\n", wifi_status);
             previous_status = wifi_status;
             if (wifi_status != WL_CONNECTED)
             {
@@ -124,7 +191,7 @@ void task_wifi(void *pvParameters)
             }
             else
             {
-                MONITOR(println("Wi-Fi connected"));
+                MON_NL("Wi-Fi connected");
                 //
                 // Update the current network information structure
                 //
@@ -158,7 +225,39 @@ void task_wifi(void *pvParameters)
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 xQueueSend(spi_comms_queue, &message, 0);   // Send network information to SPI task
             }
+        } else {
+            //
+            // Wi-Fi status has not changed, so just wait for a message from the other tasks or spi driver
+            //
+            result = xQueueReceive(wifi_comms_queue, &message, wifi_state_poll_period);
+            if ( result == pdTRUE) {
+                size_t data_length;
+                size_t packet_size;
+                protocol_packet_type_e packet_type;
+                uint8_t *packet_data;
+                packet_size = protocol_split(message, &data_length, &packet_type, &packet_data);
+                //
+                // Process the received packet
+                //
+                network_connection_info_s *conn_info = (network_connection_info_s*)packet_data ;
+                MON_NL("Network info received");
+                MON_PRINTF("SSID: %s\r\n", conn_info->network_ssid);
+                MON_PRINTF("Passphrase: %s\r\n", conn_info->pass_phrase);
+                memset(&network_info, 0, sizeof(network_connection_info_s));
+                strncpy(ssid, conn_info->network_ssid, MAX_SSID_LENGTH);
+                strncpy(password, conn_info->pass_phrase, MAX_PASS_PHRASE_LENGTH);
+                configWiFi() ;
+            }
         }
-        vTaskDelay(pdMS_TO_TICKS(10000)); // Delay for 10 seconds before checking again
     }
+}
+
+void wifi_get_net_info(void)
+{
+    uint8_t *message = get_next_spi_buffer();
+    memcpy(message, &network_info, sizeof(network_connection_info_s));
+    package_data(message, sizeof(network_connection_info_s), PROTOCOL_PACKET_TYPE_NETWORK_INFO);
+    //
+    // Send to ctxLink via SPI task
+    xQueueSend(spi_comms_queue, &message, 0);
 }
