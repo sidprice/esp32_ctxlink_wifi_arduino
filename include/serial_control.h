@@ -11,13 +11,14 @@
 
  #pragma once
 
+ #include "tasks/task_monitor.h"
 
  /**
   * @brief Macro to control Serialx.print
   * 
   * Comment the following line to turn off all serial output
   */
- // #define SERIAL_ON
+ #define SERIAL_ON
  
  /**
   * @brief The following macros enable/disable serial output
@@ -28,3 +29,32 @@
  #else
  #define MONITOR(call)
  #endif
+
+ /**
+  * @brief Experimental macro to be used for message task and queuing
+  *
+  */
+
+#ifdef SERIAL_ON
+#define MON(TEXT) \
+    do { \
+        monitor_output_message_t msg; \
+        strncpy(msg.message, TEXT, MONITOR_OUTPUT_MAX_LENGTH - 1); \
+        xQueueSendToBack(task_monitor_queue, &msg, portMAX_DELAY); \
+    } while (0)
+
+#define MON_NL(TEXT) \
+    do { \
+        monitor_output_message_t msg; \
+        strncpy(msg.message, TEXT, MONITOR_OUTPUT_MAX_LENGTH - 1); \
+        strncat(msg.message, "\r\n", MONITOR_OUTPUT_MAX_LENGTH - strlen(msg.message) - 1); \
+        xQueueSendToBack(task_monitor_queue, &msg, portMAX_DELAY); \
+    } while (0)
+
+#define MON_PRINTF(FORMAT, ...) \
+    do { \
+        monitor_output_message_t msg; \
+        snprintf(msg.message, sizeof(msg.message), FORMAT, __VA_ARGS__); \
+        xQueueSendToBack(task_monitor_queue, &msg, portMAX_DELAY); \
+    } while (0)
+#endif // SERIAL_ON
