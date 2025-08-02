@@ -13,5 +13,6 @@
 #define TASK_WIFI_H 
 
 void task_wifi(void *pvParameters) ;
-
+extern QueueHandle_t wifi_comms_queue;
+extern TaskHandle_t wifi_task_handle ;
 #endif
