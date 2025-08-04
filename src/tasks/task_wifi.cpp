@@ -56,6 +56,12 @@ static network_connection_info_s network_info;
 constexpr uint32_t wifi_comms_queue_length = 4;
 
 /**
+ * @brief Handle for the GDB Server task
+ *
+ */
+TaskHandle_t gdb_task_handle = NULL ;
+
+/**
  * @brief The Wi-Fi task message queue
  *
  * This queue is used to send messages between the other tasks and the Wi-Fi task.
@@ -63,42 +69,42 @@ constexpr uint32_t wifi_comms_queue_length = 4;
 QueueHandle_t wifi_comms_queue;
 
 /**
+ * @brief Previous Wi-Fi status
+ *
+ * This is used to detect changes in the Wi-Fi status.
+ */
+static wl_status_t previous_status = WL_NO_SHIELD;
+
+/**
  * @brief Handle Wi-Fi events
  * 
  */
 void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     MON_PRINTF("Wi-Fi event: %d\r\n", event);
-    xTaskNotifyGive(wifi_task_handle);
-}
-
-/**
- * @brief Handle the Wi-Fi disconnect event
- * 
- * @param event The Wi-Fi event type
- * @param info The Wi-Fi event information
- * 
- */
-void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
-    MON_NL("#1");
-    xTaskNotifyGive(wifi_task_handle);
-}
-
-/**
- * @brief Handle the Wi-Fi connect   event
- * 
- * @param event The Wi-Fi event type
- * @param info The Wi-Fi event information
- * 
- */
-void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
-    MON_NL("#3");
+    switch (event) {
+    {
+        case WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP: {
+            MON_NL("Wi-Got IP Address");
+            xTaskNotifyGive(wifi_task_handle);
+            break;
+        }
+        case WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED: {
+            MON_NL("Wi-Fi Disconnected");
+            previous_status = WL_DISCONNECTED;
+            xTaskNotifyGive(wifi_task_handle);
+            break;
+        }
+        default:
+        break;
+    }
+    }
 }
 
 void disconnect_wifi(void)
 {
     if (WiFi.status() == WL_CONNECTED) {
         MON_NL("Disconnecting Wi-Fi");
-        WiFi.disconnect(true) ;
+        WiFi.disconnect() ;
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Wait completed disconnect
         MON_NL("#2");
     }
@@ -106,22 +112,27 @@ void disconnect_wifi(void)
 
 wl_status_t configWiFi(void)
 {
-    wl_status_t wifi_status;
+    wifi_status = WiFi.status();
     MON_NL("Configuring Wi-Fi");
-    disconnect_wifi();
-    delay(100);
+    if ( wifi_status == WL_CONNECTED) {
+        disconnect_wifi(); // Disconnect from any existing Wi-Fi connection
+    }
+    
+    // vTaskDelay(100);
     //
     // Set up the Wi-Fi Station
     //
-    // TODO Set the hostname to something unique
+    // TODO Set the hostname to something unique, using MAC perhaps?
     //
     WiFi.setHostname("ctxLink_adapter_1");
     MON_PRINTF("Hostname = %s\r\n", WiFi.getHostname());
-    MON("Connecting to WiFi ..");
+    MON_NL("Connecting to WiFi.");
 
     uint32_t retry = 5;
 
     wifi_status = WiFi.begin(ssid, password);
+    MON_PRINTF("SSID: %s\r\n", ssid);
+    MON_PRINTF("Passphrase: %s\r\n", password);
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Wait completed connect
     do
     {
@@ -130,7 +141,7 @@ wl_status_t configWiFi(void)
         {
             break;
         }
-        delay(1000);
+        vTaskDelay(1000);
         MON(".");
     } while (retry--);
     MON("\r\n");
@@ -152,7 +163,6 @@ void task_wifi(void *pvParameters)
     (void)pvParameters; // Unused parameter
     BaseType_t result ;
     static uint8_t *message;
-    TaskHandle_t xHandle = NULL;
     //
     wifi_comms_queue = xQueueCreate(wifi_comms_queue_length, sizeof(uint8_t *)); // Create the queue for the SPI task
     //
@@ -161,14 +171,11 @@ void task_wifi(void *pvParameters)
     size_t settings_count = preferences_get_wifi_parameters(ssid,password) ;
     MON_PRINTF("SSID: %s\r\n", (char*)ssid);
     MON_PRINTF("Passphrase: %s\r\n", (char*)password);
-    WiFi.onEvent(onWiFiDisconnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
-    WiFi.onEvent(onWiFiConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
-    WiFi.onEvent(onWiFiEvent, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
+    WiFi.onEvent(onWiFiEvent, WiFiEvent_t::ARDUINO_EVENT_MAX); // Register the Wi-Fi event handler
     configWiFi(); // Attempt to connect to Wi-Fi
     while (1)
     {
-        static wl_status_t previous_status = WL_NO_SHIELD;
-        wl_status_t wifi_status = WiFi.status();
+        wifi_status = WiFi.status();
         //
         // Has the wifi status changed?
         //
@@ -178,15 +185,9 @@ void task_wifi(void *pvParameters)
             previous_status = wifi_status;
             if (wifi_status != WL_CONNECTED)
             {
+                MON_NL("Wi-Fi disconnected, kill GDB server task");
                 // TODO Tell ctxLink network connection lost
-                //
-                // Delete the GDB server task if it exists
-                //
-                if (xHandle != NULL)
-                {
-                    vTaskDelete(xHandle);
-                    xHandle = NULL;
-                }
+
                 configWiFi(); // Attempt to reconnect to Wi-Fi
             }
             else
@@ -217,7 +218,7 @@ void task_wifi(void *pvParameters)
                 //
                 // Start the GDB server task.
                 //
-                xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, &xHandle);
+                xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, &gdb_task_handle);
                 //
                 // Assert ESP32 READY to ensure ctxLink knows
                 //
