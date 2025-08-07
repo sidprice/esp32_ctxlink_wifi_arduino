@@ -28,6 +28,33 @@ QueueHandle_t gdb_server_queue;
 
 constexpr uint32_t gdb_server_queue_length = 16;
 
+bool configure_server(in_port_t *port, int *server_fd, struct sockaddr_in *server_addr) {
+    // Create socket
+    *server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    // Set up server address
+    server_addr->sin_family = AF_INET;
+    server_addr->sin_addr.s_addr = INADDR_ANY;
+    server_addr->sin_port = htons(*port);
+
+    // Bind socket to address
+    if (bind(*server_fd, (struct sockaddr *)server_addr, sizeof(*server_addr)) < 0)
+    {
+        MONITOR(print("Socket bind failed -> "));
+        MONITOR(println(errno));
+        return false;
+    }
+
+    // Listen for incoming connections
+    if (listen(*server_fd, 5) < 0)
+    { // TODO: Test for single client operation, set to 1 or 0?
+        MONITOR(print("Socket listen failed -> "));
+        MONITOR(println(errno));
+        return false;
+    }
+    return true;
+}
+
 /**
  * @brief Task to handle the GDB Wi-Fi server
  *
@@ -42,34 +69,9 @@ void task_wifi_server(void *pvParameters)
     socklen_t addr_len = sizeof(client_addr);
 
     in_port_t port = (in_port_t)((uint32_t)pvParameters); // Recover the port number for this task
-
-    // Create socket
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-
-    // Set up server address
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(port);
-
-    // Bind socket to address
-    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
-        MONITOR(print("Socket bind failed -> "));
-        MONITOR(println(errno));
-        return;
-    }
-
-    // Listen for incoming connections
-    if (listen(server_fd, 5) < 0)
-    { // TODO: Test for single client operation, set to 1 or 0?
-        MONITOR(print("Socket listen failed -> "));
-        MONITOR(println(errno));
-        return;
-    }
-
     //
-    // Just halt here for now
-    //
+    configure_server(&port, &server_fd, &server_addr);
+
     MONITOR(println("Server task started"));
     //
     // Main server loop
@@ -123,22 +125,51 @@ void task_wifi_server(void *pvParameters)
                     protocol_packet_type_e packet_type;
                     uint8_t *packet_data;
                     protocol_split(message, &packet_size, &packet_type, &packet_data);
-                    // MONITOR(println("%d bytes to GDB", packet_size));
-                    // MONITOR(print("Sending to GDB: ")); MONITOR(println(packet_size));
 
-                    while(packet_size > 0)
+                    switch (packet_type)
                     {
-                        bytes_sent = send(client_fd, packet_data, packet_size, 0);
-                        if (bytes_sent < 0)
-                        {
-                            MONITOR(print("Socket send failed: "));
-                            MONITOR(println(errno));
+                        case PROTOCOL_PACKET_TYPE_TO_GDB: {
+                            while(packet_size > 0)
+                            {
+                                bytes_sent = send(client_fd, packet_data, packet_size, 0);
+                                if (bytes_sent < 0)
+                                {
+                                    MONITOR(print("Socket send failed: "));
+                                    MONITOR(println(errno));
+                                    break;
+                                }
+                                packet_size -= bytes_sent;
+                                packet_data += bytes_sent;
+                            }
                             break;
                         }
-                        packet_size -= bytes_sent;
-                        packet_data += bytes_sent;
+
+                        case PROTOCOL_PACKET_TYPE_COMMAND: {
+                            protocol_packet_command_s *command_packet = (protocol_packet_command_s *)packet_data;
+                            if (command_packet->command == PROTOCOL_PACKET_TYPE_CMD_SHUTDOWN_GDB_SERVER)
+                            {
+                                MON_NL("Close Client/Server Sockets");
+                                close(client_fd);
+                                client_fd = -1;
+                                close(server_fd);
+                                server_fd = -1;
+                            }
+                            else if (command_packet->command == PROTOCOL_PACKET_TYPE_CMD_START_GDB_SERVER)
+                            {
+                                configure_server(&port, &server_fd, &server_addr);
+                                MON_NL("Reconfigured Server");
+                            }
+                            else
+                            {
+                                MON_NL("Unknown command received");
+                            }
+                            break;
+                        }
+
+                        default:
+                            MON_NL("Unknown packet type received");
+                            break;
                     }
-                    // send(client_fd, packet_data, packet_size, 0);
                 }
                 int bytes_received = read(client_fd, &net_input_buffer, sizeof(net_input_buffer));
                 if (bytes_received > 0)
