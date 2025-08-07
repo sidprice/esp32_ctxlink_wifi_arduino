@@ -21,9 +21,10 @@
 #include "task_spi_comms.h"
 
 #include "ctxlink.h"
-// Wi-Fi credentials
-// TODO These need to be set from ctxLink and saved in the preferences
 
+//
+// Wi-Fi credentials
+//
 static char ssid[MAX_SSID_LENGTH] {0} ;
 static char password[MAX_PASS_PHRASE_LENGTH] = {0} ;
 
@@ -45,9 +46,6 @@ wl_status_t wifi_status = WL_NO_SHIELD;
  *
  */
 static network_connection_info_s network_info;
-
-// const char* ssid = "Avian Ambassadors";
-// const char* password = "mijo498rocks";
 
 /**
  * @brief This is the depth of the WIFI task messaging queue
@@ -147,6 +145,7 @@ wl_status_t configWiFi(void)
     {
         MON_PRINTF("IP Address: %s\r\n", WiFi.localIP().toString().c_str());
         MON_PRINTF("RSSI: %d\r\n", WiFi.RSSI());
+        preferences_save_wifi_parameters(ssid, password);
     }
     else
     {
