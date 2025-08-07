@@ -48,12 +48,11 @@ void preferences_init(void) {
  * 
  */
 void preferences_save_wifi_parameters(char *ssid, char *password) {
-    preferences.putBytes(wifi_ssid_key, ssid, MAX_SSID_LENGTH);
+    preferences.putBytes(wifi_ssid_key, ssid, strlen(ssid));
     //
     // TODO Encrypt the pass phrase
     //
-    preferences.putBytes(wifi_password_key, password, MAX_PASS_PHRASE_LENGTH);
-    preferences.putBytes(wifi_ssid_key, ssid, MAX_SSID_LENGTH);
+    preferences.putBytes(wifi_password_key, password, strlen(password));
 }
 
 /**
@@ -66,12 +65,12 @@ void preferences_save_wifi_parameters(char *ssid, char *password) {
 size_t preferences_get_wifi_parameters(char *ssid, char *password) {
     size_t ssid_length, password_length; ;
     bool save = false ;
-    MONITOR(println("preferences_get_wifi_parameters"));
     if (!ssid || !password) {
         return 0;
     }
     ssid_length = preferences.getBytes(wifi_ssid_key, ssid, MAX_SSID_LENGTH);
     if ( ssid_length == 0 ) {
+        MON_NL("No SSID found in preferences, using default");
         strcpy(ssid, "ctxlink_net"); // Default SSID
         ssid_length = strlen((char *)ssid);
         save = true; // Need to save the default SSID
@@ -81,6 +80,7 @@ size_t preferences_get_wifi_parameters(char *ssid, char *password) {
     //
     password_length = preferences.getBytes(wifi_password_key, password, MAX_PASS_PHRASE_LENGTH);
     if ( password_length == 0 ) {
+        MON_NL("No password found in preferences, using default");
         strcpy(password, "pass_phrase"); // Default pass phrase
         password_length = strlen((char *)password);
         save = true; // Need to save the default pass phrase
