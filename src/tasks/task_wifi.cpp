@@ -117,8 +117,6 @@ wl_status_t configWiFi(void)
     if ( wifi_status == WL_CONNECTED) {
         disconnect_wifi(); // Disconnect from any existing Wi-Fi connection
     }
-    
-    // vTaskDelay(100);
     //
     // Set up the Wi-Fi Station
     //
@@ -128,7 +126,7 @@ wl_status_t configWiFi(void)
     MON_PRINTF("Hostname = %s\r\n", WiFi.getHostname());
     MON_NL("Connecting to WiFi.");
 
-    uint32_t retry = 5;
+    uint32_t retry = 10;
 
     wifi_status = WiFi.begin(ssid, password);
     MON_PRINTF("SSID: %s\r\n", ssid);
@@ -168,6 +166,8 @@ void task_wifi(void *pvParameters)
     //
     // Get the wi-fi settings from preferences
     //
+    memset(ssid, 0, MAX_SSID_LENGTH);
+    memset(password, 0, MAX_PASS_PHRASE_LENGTH);
     size_t settings_count = preferences_get_wifi_parameters(ssid,password) ;
     MON_PRINTF("SSID: %s\r\n", (char*)ssid);
     MON_PRINTF("Passphrase: %s\r\n", (char*)password);
@@ -181,22 +181,29 @@ void task_wifi(void *pvParameters)
         //
         if (wifi_status != previous_status)
         {
+            protocol_packet_command_s command = {0};
             MON_PRINTF("Wi-Fi status = %d\r\n", wifi_status);
             previous_status = wifi_status;
-            if (wifi_status != WL_CONNECTED)
+            if (wifi_status == WL_DISCONNECTED)
             {
-                MON_NL("Wi-Fi disconnected, kill GDB server task");
-                // TODO Tell ctxLink network connection lost
-
-                configWiFi(); // Attempt to reconnect to Wi-Fi
+                if (gdb_task_handle != NULL)
+                {
+                    MON_NL("Shut down Server");
+                    command.type = PROTOCOL_PACKET_TYPE_CMD;
+                    command.command = PROTOCOL_PACKET_TYPE_CMD_SHUTDOWN_GDB_SERVER;
+                    if ( gdb_server_queue != NULL) {
+                        xQueueSend(gdb_server_queue, &command, 0); // Send command to GDB server task
+                    }  
+               }
+                wifi_status = configWiFi(); // Attempt to reconnect to Wi-Fi
             }
-            else
-            {
-                MON_NL("Wi-Fi connected");
+            if ( wifi_status == WL_CONNECTED) {
+                MON_NL("Wi-Fi Reconnected");
                 //
                 // Update the current network information structure
                 //
                 memset(&network_info, 0, sizeof(network_connection_info_s));
+                MON_PRINTF("Wi-Fi connected to SSID: %s\r\n", ssid);
                 strncpy(network_info.network_ssid, ssid, MAX_SSID_LENGTH);
                 network_info.type = PROTOCOL_PACKET_STATUS_TYPE_NETWORK_CLIENT;
                 network_info.connected = 0x01; // 0x01 = connected, 0x00 = disconnected
@@ -218,7 +225,18 @@ void task_wifi(void *pvParameters)
                 //
                 // Start the GDB server task.
                 //
-                xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, &gdb_task_handle);
+                if (gdb_task_handle == NULL) {
+                    //
+                    // Start the GDB Server Task
+                    //
+                    MON_NL("Starting GDB Server Task");
+                    xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, &gdb_task_handle);
+                } else {
+                    MON_NL("Restart GDB Server");
+                    command.type = PROTOCOL_PACKET_TYPE_CMD;
+                    command.command = PROTOCOL_PACKET_TYPE_CMD_START_GDB_SERVER;
+                    xQueueSend(gdb_server_queue, &command, 0); // Send network information to GDB server task
+                }
                 //
                 // Assert ESP32 READY to ensure ctxLink knows
                 //
@@ -256,6 +274,7 @@ void task_wifi(void *pvParameters)
 void wifi_get_net_info(void)
 {
     uint8_t *message = get_next_spi_buffer();
+    MON_NL("Sending network info");
     memcpy(message, &network_info, sizeof(network_connection_info_s));
     package_data(message, sizeof(network_connection_info_s), PROTOCOL_PACKET_TYPE_NETWORK_INFO);
     //

@@ -19,6 +19,7 @@
 #include "ctxlink.h"
 #include "protocol.h"
 #include "tasks/task_server.h"
+#include "tasks/task_wifi.h"
 
 #include "debug.h"
 
@@ -120,7 +121,7 @@ void task_spi_comms(void *pvParameters)
         {
         case PROTOCOL_PACKET_TYPE_EMPTY:
         {
-            MONITOR(println("TX done?)"));
+            MON_NL("TX done?");
             break;
         }
         case PROTOCOL_PACKET_TYPE_TO_GDB:
@@ -131,6 +132,14 @@ void task_spi_comms(void *pvParameters)
             // TODO Need to check if there is a client attached to GDB server
             //
             xQueueSend(gdb_server_queue, &message, portMAX_DELAY); // Send the message to the gdb server task
+            break;
+        }
+
+        case PROTOCOL_PACKET_TYPE_SET_NETWORK_INFO: {
+            //
+            // Send the packet to the Wi-Fi task
+            //
+            xQueueSend(wifi_comms_queue, &message, portMAX_DELAY); // Send the message to the Wi-Fi task
             break;
         }
         //
@@ -148,8 +157,7 @@ void task_spi_comms(void *pvParameters)
         default:
         {
 
-            MONITOR(print("Unknown packet type -> "));
-            MONITOR(println(packet_type));
+            MON_PRINTF("Unknown packet type -> %d", packet_type);
             break;
         }
         }
