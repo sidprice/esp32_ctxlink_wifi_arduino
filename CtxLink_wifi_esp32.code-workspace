@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "Test_n4r2",
+			"path": "../ESP32_PlatformIO/Test_n4r2"
+		},
+		{
+			"name": "test_esp32-n8",
+			"path": "../ESP32_PlatformIO/test_esp32-n8"
+		}
+	],
+	"settings": {}
+}
