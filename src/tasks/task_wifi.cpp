@@ -79,8 +79,8 @@ static wl_status_t previous_status = WL_NO_SHIELD;
  */
 void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     MON_PRINTF("Wi-Fi event: %d\r\n", event);
+    previous_status = wifi_status; // Store the previous status
     switch (event) {
-    {
         case WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP: {
             MON_NL("Wi-Got IP Address");
             xTaskNotifyGive(wifi_task_handle);
@@ -88,17 +88,30 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
         }
         case WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED: {
             MON_NL("Wi-Fi Disconnected");
-            previous_status = WL_DISCONNECTED;
             xTaskNotifyGive(wifi_task_handle);
             break;
         }
         default:
         break;
     }
+}
+
+/**
+ * @brief Send a command to the server task to shut down the server
+ * 
+ */
+void wifi_send_server_command(protocol_command_type_e command)
+{
+    if (gdb_task_handle != NULL && gdb_server_queue != NULL)
+    {
+        protocol_packet_command_s cmd_packet = {0};
+        cmd_packet.type = PROTOCOL_PACKET_TYPE_CMD;
+        cmd_packet.command = command;
+        xQueueSend(gdb_server_queue, &cmd_packet, 0); // Send command to GDB server task
     }
 }
 
-void disconnect_wifi(void)
+void wifi_disconnect(void)
 {
     if (WiFi.status() == WL_CONNECTED) {
         MON_NL("Disconnecting Wi-Fi");
@@ -108,13 +121,8 @@ void disconnect_wifi(void)
     }
 } // deinitWiFi() end
 
-wl_status_t configWiFi(void)
+wl_status_t wifi_connect(void)
 {
-    wifi_status = WiFi.status();
-    MON_NL("Configuring Wi-Fi");
-    if ( wifi_status == WL_CONNECTED) {
-        disconnect_wifi(); // Disconnect from any existing Wi-Fi connection
-    }
     //
     // Set up the Wi-Fi Station
     //
@@ -155,6 +163,17 @@ wl_status_t configWiFi(void)
     return wifi_status;
 } // configWiFi() end
 
+void wifi_get_net_info(void)
+{
+    uint8_t *message = get_next_spi_buffer();
+    MON_NL("Sending network info");
+    memcpy(message, &network_info, sizeof(network_connection_info_s));
+    package_data(message, sizeof(network_connection_info_s), PROTOCOL_PACKET_TYPE_NETWORK_INFO);
+    //
+    // Send to ctxLink via SPI task
+    xQueueSend(spi_comms_queue, &message, 0);
+}
+
 void task_wifi(void *pvParameters)
 {
     (void)pvParameters; // Unused parameter
@@ -171,7 +190,7 @@ void task_wifi(void *pvParameters)
     MON_PRINTF("SSID: %s\r\n", (char*)ssid);
     MON_PRINTF("Passphrase: %s\r\n", (char*)password);
     WiFi.onEvent(onWiFiEvent, WiFiEvent_t::ARDUINO_EVENT_MAX); // Register the Wi-Fi event handler
-    configWiFi(); // Attempt to connect to Wi-Fi
+    wifi_connect(); // Attempt to connect to Wi-Fi
     while (1)
     {
         wifi_status = WiFi.status();
@@ -180,69 +199,70 @@ void task_wifi(void *pvParameters)
         //
         if (wifi_status != previous_status)
         {
-            protocol_packet_command_s command = {0};
-            MON_PRINTF("Wi-Fi status = %d\r\n", wifi_status);
+            MON_PRINTF("Wi-Fi status changed = %d\r\n", wifi_status);
             previous_status = wifi_status;
-            if (wifi_status == WL_DISCONNECTED)
-            {
-                if (gdb_task_handle != NULL)
-                {
-                    MON_NL("Shut down Server");
-                    command.type = PROTOCOL_PACKET_TYPE_CMD;
-                    command.command = PROTOCOL_PACKET_TYPE_CMD_SHUTDOWN_GDB_SERVER;
-                    if ( gdb_server_queue != NULL) {
-                        xQueueSend(gdb_server_queue, &command, 0); // Send command to GDB server task
-                    }  
-               }
-                wifi_status = configWiFi(); // Attempt to reconnect to Wi-Fi
-            }
-            if ( wifi_status == WL_CONNECTED) {
-                MON_NL("Wi-Fi Reconnected");
-                //
-                // Update the current network information structure
-                //
-                memset(&network_info, 0, sizeof(network_connection_info_s));
-                MON_PRINTF("Wi-Fi connected to SSID: %s\r\n", ssid);
-                strncpy(network_info.network_ssid, ssid, MAX_SSID_LENGTH);
-                network_info.type = PROTOCOL_PACKET_STATUS_TYPE_NETWORK_CLIENT;
-                network_info.connected = 0x01; // 0x01 = connected, 0x00 = disconnected
-                network_info.ip_address[0] = (uint8_t)(WiFi.localIP()[0]);
-                network_info.ip_address[1] = (uint8_t)(WiFi.localIP()[1]);
-                network_info.ip_address[2] = (uint8_t)(WiFi.localIP()[2]);
-                network_info.ip_address[3] = (uint8_t)(WiFi.localIP()[3]);
-                network_info.mac_address[0] = (uint8_t)(WiFi.macAddress()[0]);
-                network_info.mac_address[1] = (uint8_t)(WiFi.macAddress()[1]);
-                network_info.mac_address[2] = (uint8_t)(WiFi.macAddress()[2]);
-                network_info.mac_address[3] = (uint8_t)(WiFi.macAddress()[3]);
-                network_info.mac_address[4] = (uint8_t)(WiFi.macAddress()[4]);
-                network_info.mac_address[5] = (uint8_t)(WiFi.macAddress()[5]);
-                network_info.rssi = (int8_t)(WiFi.RSSI());
-                //
-                uint8_t *message = get_next_spi_buffer();
-                memcpy(message, &network_info, sizeof(network_connection_info_s));
-                package_data(message, sizeof(network_connection_info_s), PROTOCOL_PACKET_TYPE_NETWORK_INFO);
-                //
-                // Start the GDB server task.
-                //
-                if (gdb_task_handle == NULL) {
+
+            switch(wifi_status) {
+                case WL_CONNECTED: {
+                    MON_NL("Wi-Fi Connected");
                     //
-                    // Start the GDB Server Task
+                    // Update the current network information structure
                     //
-                    MON_NL("Starting GDB Server Task");
-                    xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, &gdb_task_handle);
-                } else {
-                    MON_NL("Restart GDB Server");
-                    command.type = PROTOCOL_PACKET_TYPE_CMD;
-                    command.command = PROTOCOL_PACKET_TYPE_CMD_START_GDB_SERVER;
-                    xQueueSend(gdb_server_queue, &command, 0); // Send network information to GDB server task
+                    memset(&network_info, 0, sizeof(network_connection_info_s));
+                    MON_PRINTF("Wi-Fi connected to SSID: %s\r\n", ssid);
+                    strncpy(network_info.network_ssid, ssid, MAX_SSID_LENGTH);
+                    network_info.type = PROTOCOL_PACKET_STATUS_TYPE_NETWORK_CLIENT;
+                    network_info.connected = 0x01; // 0x01 = connected, 0x00 = disconnected
+                    network_info.ip_address[0] = (uint8_t)(WiFi.localIP()[0]);
+                    network_info.ip_address[1] = (uint8_t)(WiFi.localIP()[1]);
+                    network_info.ip_address[2] = (uint8_t)(WiFi.localIP()[2]);
+                    network_info.ip_address[3] = (uint8_t)(WiFi.localIP()[3]);
+                    network_info.mac_address[0] = (uint8_t)(WiFi.macAddress()[0]);
+                    network_info.mac_address[1] = (uint8_t)(WiFi.macAddress()[1]);
+                    network_info.mac_address[2] = (uint8_t)(WiFi.macAddress()[2]);
+                    network_info.mac_address[3] = (uint8_t)(WiFi.macAddress()[3]);
+                    network_info.mac_address[4] = (uint8_t)(WiFi.macAddress()[4]);
+                    network_info.mac_address[5] = (uint8_t)(WiFi.macAddress()[5]);
+                    network_info.rssi = (int8_t)(WiFi.RSSI());
+                    //
+                    uint8_t *message = get_next_spi_buffer();
+                    memcpy(message, &network_info, sizeof(network_connection_info_s));
+                    package_data(message, sizeof(network_connection_info_s), PROTOCOL_PACKET_TYPE_NETWORK_INFO);
+                    //
+                    // Start the GDB server task.
+                    //
+                    if (gdb_task_handle == NULL) {
+                        //
+                        // Start the GDB Server Task
+                        //
+                        MON_NL("Starting GDB Server Task");
+                        xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, &gdb_task_handle);
+                    } else {
+                        MON_NL("Restart GDB Server");
+                        wifi_send_server_command(PROTOCOL_PACKET_TYPE_CMD_START_GDB_SERVER);
+                    }
+                    //
+                    // Assert ESP32 READY to ensure ctxLink knows
+                    //
+                    set_ready();
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    xQueueSend(spi_comms_queue, &message, 0);   // Send network information to SPI task
+                    break;
                 }
-                //
-                // Assert ESP32 READY to ensure ctxLink knows
-                //
-                set_ready();
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                xQueueSend(spi_comms_queue, &message, 0);   // Send network information to SPI task
+
+                case WL_DISCONNECTED: {
+                    MON_NL("Wi-Fi Disconnected");
+                    wifi_send_server_command(PROTOCOL_PACKET_TYPE_CMD_SHUTDOWN_GDB_SERVER);
+                    wifi_status = wifi_connect(); // Attempt to reconnect to Wi-Fi
+                    break;
+                }
+                default: {
+                    MON_PRINTF("Wi-Fi status changed = %d\r\n", wifi_status);
+                    wifi_status = WL_DISCONNECTED;
+                    break;
+                }
             }
+
         } else {
             //
             // Wi-Fi status has not changed, so just wait for a message from the other tasks or spi driver
@@ -261,22 +281,31 @@ void task_wifi(void *pvParameters)
                 MON_NL("Network info received");
                 MON_PRINTF("SSID: %s\r\n", conn_info->network_ssid);
                 MON_PRINTF("Passphrase: %s\r\n", conn_info->pass_phrase);
-                memset(&network_info, 0, sizeof(network_connection_info_s));
-                strncpy(ssid, conn_info->network_ssid, MAX_SSID_LENGTH);
-                strncpy(password, conn_info->pass_phrase, MAX_PASS_PHRASE_LENGTH);
-                configWiFi() ;
+                //
+                // Check if the Wi-Fi is already connected
+                //
+                wifi_status = WiFi.status();
+                if (wifi_status == WL_CONNECTED) {
+                    //
+                    // Check if the network information has changed
+                    //
+                    if (strcmp(ssid, conn_info->network_ssid) != 0 || strcmp(password, conn_info->pass_phrase) != 0) {
+                        MON_NL("Wi-Fi credentials changed, reconnecting...");
+                        wifi_disconnect(); // Disconnect from the current Wi-Fi connection
+                        memset(&network_info, 0, sizeof(network_connection_info_s));
+                        strncpy(ssid, conn_info->network_ssid, MAX_SSID_LENGTH);
+                        strncpy(password, conn_info->pass_phrase, MAX_PASS_PHRASE_LENGTH);
+                        wifi_connect() ;
+                    } else {
+                        MON_NL("Wi-Fi credentials unchanged");
+                        wifi_get_net_info();
+                    }
+                } else {
+                    strncpy(ssid, conn_info->network_ssid, MAX_SSID_LENGTH);
+                    strncpy(password, conn_info->pass_phrase, MAX_PASS_PHRASE_LENGTH);
+                    wifi_connect() ;
+                }
             }
         }
     }
-}
-
-void wifi_get_net_info(void)
-{
-    uint8_t *message = get_next_spi_buffer();
-    MON_NL("Sending network info");
-    memcpy(message, &network_info, sizeof(network_connection_info_s));
-    package_data(message, sizeof(network_connection_info_s), PROTOCOL_PACKET_TYPE_NETWORK_INFO);
-    //
-    // Send to ctxLink via SPI task
-    xQueueSend(spi_comms_queue, &message, 0);
 }
