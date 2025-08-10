@@ -54,6 +54,22 @@ static network_connection_info_s network_info;
 constexpr uint32_t wifi_comms_queue_length = 4;
 
 /**
+ * @brief Instantiate the GDB server parameters
+ * 
+ * These are passed to a server instance and also used by the SPI
+ * task to endure messages are routed correctly
+ *  
+ */
+ server_task_params_t gdb_server_params = {
+    PROTOCOL_PACKET_STATUS_TYPE_GDB_CLIENT,
+    "GDB",
+    GDB_SERVER_PORT,
+    NULL,   // Server queue
+    NULL,   // Server task handle
+    PROTOCOL_PACKET_TYPE_FROM_GDB,
+ } ;
+
+/**
  * @brief Handle for the GDB Server task
  *
  */
@@ -102,12 +118,12 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
  */
 void wifi_send_server_command(protocol_command_type_e command)
 {
-    if (gdb_task_handle != NULL && gdb_server_queue != NULL)
+    if (gdb_task_handle != NULL && server_queue != NULL)
     {
         protocol_packet_command_s cmd_packet = {0};
         cmd_packet.type = PROTOCOL_PACKET_TYPE_CMD;
         cmd_packet.command = command;
-        xQueueSend(gdb_server_queue, &cmd_packet, 0); // Send command to GDB server task
+        xQueueSend(server_queue, &cmd_packet, 0); // Send command to GDB server task
     }
 }
 
@@ -236,7 +252,7 @@ void task_wifi(void *pvParameters)
                         // Start the GDB Server Task
                         //
                         MON_NL("Starting GDB Server Task");
-                        xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)2159, 1, &gdb_task_handle);
+                        xTaskCreate(task_wifi_server, "GDB Server", 4096, (void *)&gdb_server_params, 1, &gdb_task_handle);
                     } else {
                         MON_NL("Restart GDB Server");
                         wifi_send_server_command(PROTOCOL_PACKET_TYPE_CMD_START_GDB_SERVER);
