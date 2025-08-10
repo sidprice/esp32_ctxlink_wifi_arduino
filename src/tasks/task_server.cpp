@@ -28,6 +28,31 @@ QueueHandle_t server_queue;
 
 constexpr uint32_t server_queue_length = 16;
 
+/**
+ * @brief Send the client state to the ctxLink
+ *
+ * @param server_params The server task parameters
+ * @param state The state of the client (0x01 = connected, 0x00 = disconnected)
+ */
+void server_client_state_to_ctxlink(server_task_params_t *server_params, uint8_t state)
+{
+    protocol_packet_status_s status_packet ;
+    status_packet.type = server_params->server_type; // Indicate the server type
+    status_packet.status = state; // 0x01 = connected, 0x00 = disconnected
+    uint8_t *message = get_next_spi_buffer();
+    memcpy(message, &status_packet, sizeof(protocol_packet_status_s));
+    package_data(message, sizeof(protocol_packet_status_s), PROTOCOL_PACKET_TYPE_STATUS);
+    xQueueSend(spi_comms_queue, &message, 0);
+}
+
+/**
+ * @brief Configure the server
+ *
+ * @param port The port number to bind the server to
+ * @param server_fd The file descriptor for the server socket
+ * @param server_addr The address structure for the server
+ * @return true if the server was configured successfully, false otherwise
+ */
 bool configure_server(in_port_t *port, int *server_fd, struct sockaddr_in *server_addr) {
     // Create socket
     *server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -104,13 +129,7 @@ void task_wifi_server(void *pvParameters)
             //
             // Inform ctxLink GDB client connected
             //
-            protocol_packet_status_s status_packet ;
-            status_packet.type = server_params->server_type; // Indicate the server type
-            status_packet.status = 0x01; // 0x01 = connected, 0x00 = disconnected
-            uint8_t *message = get_next_spi_buffer();
-            memcpy(message, &status_packet, sizeof(protocol_packet_status_s));
-            package_data(message, sizeof(protocol_packet_status_s), PROTOCOL_PACKET_TYPE_STATUS);
-            xQueueSend(spi_comms_queue, &message, 0);
+            server_client_state_to_ctxlink(server_params, 0x01);
             //
             //  Server data handling loop
             //
@@ -198,6 +217,11 @@ void task_wifi_server(void *pvParameters)
                 {
                     MONITOR(println("Client disconnected"));
                     close(client_fd);
+                    client_fd = -1;
+                    //
+                    // Inform ctxLink the client disconnected
+                    //
+                    server_client_state_to_ctxlink(server_params, 0x00);
                     break;
                 }
                 else if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -209,6 +233,8 @@ void task_wifi_server(void *pvParameters)
                 {
                     MONITOR(println("Client disconnected abruptly (ECONNRESET)"));
                     close(client_fd);
+                    client_fd = -1;
+                    server_client_state_to_ctxlink(server_params, 0x00);
                     break;
                 }
                 else
@@ -216,6 +242,8 @@ void task_wifi_server(void *pvParameters)
                     MONITOR(print("Socket read failed: "));
                     MONITOR(println(errno));
                     close(client_fd);
+                    client_fd = -1;
+                    server_client_state_to_ctxlink(server_params, 0x00);
                     break;
                 }
             }
