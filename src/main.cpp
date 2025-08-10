@@ -55,11 +55,11 @@ void setup() {
   //
   // Create the SPI communications task
   //
-  xTaskCreate(task_spi_comms, "SPI Comms", 4096, NULL, 1, NULL) ;
+  xTaskCreate(task_spi_comms, "SPI Comms", 4096, NULL, 2, NULL) ;
   //
   // Set up Wi-Fi connection and monitor status
   //
-  xTaskCreate(task_wifi, "Wi-Fi", 4096, NULL, 1, &wifi_task_handle) ;
+  xTaskCreate(task_wifi, "Wi-Fi", 4096, NULL, 2, &wifi_task_handle) ;
 }
 
 void loop() {
