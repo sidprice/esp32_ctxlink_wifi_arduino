@@ -116,7 +116,6 @@ void task_spi_comms(void *pvParameters)
         protocol_packet_type_e packet_type;
         uint8_t *packet_data;
         packet_size = protocol_split(message, &data_length, &packet_type, &packet_data);
-
         switch (packet_type)
         {
         case PROTOCOL_PACKET_TYPE_EMPTY:
@@ -129,9 +128,18 @@ void task_spi_comms(void *pvParameters)
             //
             // Send the packet to the server task
             //
+            //
+            // Change the message type so that the server routes it correctly.
+            //
+            // The server parameters ensure the message is routed to the right
+            // server task.
+            //
+            *(message+PACKET_HEADER_SOURCE_ID) = PROTOCOL_PACKET_TYPE_TO_CLIENT;
+            //
             // TODO Need to check if there is a client attached to GDB server
             //
-            xQueueSend(gdb_server_queue, &message, portMAX_DELAY); // Send the message to the gdb server task
+
+            xQueueSend(gdb_server_params.server_queue, &message, portMAX_DELAY); // Send the message to the gdb server task
             break;
         }
 

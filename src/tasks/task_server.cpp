@@ -24,9 +24,9 @@
 
 char net_input_buffer[2048]; // Data received from network
 
-QueueHandle_t gdb_server_queue;
+QueueHandle_t server_queue;
 
-constexpr uint32_t gdb_server_queue_length = 16;
+constexpr uint32_t server_queue_length = 16;
 
 bool configure_server(in_port_t *port, int *server_fd, struct sockaddr_in *server_addr) {
     // Create socket
@@ -62,25 +62,29 @@ bool configure_server(in_port_t *port, int *server_fd, struct sockaddr_in *serve
  */
 void task_wifi_server(void *pvParameters)
 {
+    server_task_params_t *server_params = (server_task_params_t *)pvParameters;
     int server_fd, client_fd;
     struct sockaddr_in server_addr, client_addr;
 
-    gdb_server_queue = xQueueCreate(gdb_server_queue_length, sizeof(uint8_t *)); // Create the queue for the GDB server task
+    server_queue = xQueueCreate(server_queue_length, sizeof(uint8_t *)); // Create the queue for the GDB server task
+    server_params->server_queue = server_queue; // Save the queue to the server task parameters
     socklen_t addr_len = sizeof(client_addr);
 
-    in_port_t port = (in_port_t)((uint32_t)pvParameters); // Recover the port number for this task
+    in_port_t port = (in_port_t)server_params->port; // Recover the port number for this task
     //
-    configure_server(&port, &server_fd, &server_addr);
+    if (!configure_server(&port, &server_fd, &server_addr))
+    {
+        MON_PRINTF("Failed to configure %s server\r\n", server_params->server_name);
+    }
 
-    MONITOR(println("Server task started"));
+    MON_PRINTF("%s server task started\r\n", server_params->server_name);
     //
     // Main server loop
     //
     while (true)
     {
         // Accept incoming connections
-        MONITOR(print("Server listening on port "));
-        MONITOR(println(port));
+        MON_PRINTF("%s server waiting for client on port %d.\r\n", server_params->server_name, port);
         while (true)
         {
             client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &addr_len);
@@ -88,7 +92,7 @@ void task_wifi_server(void *pvParameters)
             {
                 MONITOR(print("Socket accept failed"));
                 MONITOR(println(errno));
-                return;
+                return; // TODO Deal with error, cannot return!
             }
             MONITOR(println("Client connected"));
             // Set the client socket to non-blocking mode
@@ -101,7 +105,7 @@ void task_wifi_server(void *pvParameters)
             // Inform ctxLink GDB client connected
             //
             protocol_packet_status_s status_packet ;
-            status_packet.type = PROTOCOL_PACKET_STATUS_TYPE_GDB_CLIENT;
+            status_packet.type = server_params->server_type; // Indicate the server type
             status_packet.status = 0x01; // 0x01 = connected, 0x00 = disconnected
             uint8_t *message = get_next_spi_buffer();
             memcpy(message, &status_packet, sizeof(protocol_packet_status_s));
@@ -117,7 +121,7 @@ void task_wifi_server(void *pvParameters)
                 //
                 // Check for packets from SPI task
                 //
-                result = xQueueReceive(gdb_server_queue, &message, 0); // Do not block here
+                result = xQueueReceive(server_queue, &message, 0); // Do not block here
                 if (result == pdTRUE)
                 {
                     size_t bytes_sent;
@@ -128,7 +132,7 @@ void task_wifi_server(void *pvParameters)
 
                     switch (packet_type)
                     {
-                        case PROTOCOL_PACKET_TYPE_TO_GDB: {
+                        case PROTOCOL_PACKET_TYPE_TO_CLIENT: {
                             while(packet_size > 0)
                             {
                                 bytes_sent = send(client_fd, packet_data, packet_size, 0);
@@ -175,10 +179,10 @@ void task_wifi_server(void *pvParameters)
                 if (bytes_received > 0)
                 {
                     size_t packed_size;
-                    // MONITOR(print("Bytes received: ")) ; MONITOR(println(bytes_received)) ;
+                    //
                     // Send input to the SPI task for forwarding to ctxLink
                     //
-                    packed_size = package_data((uint8_t *)net_input_buffer, bytes_received, PROTOCOL_PACKET_TYPE_FROM_GDB);
+                    packed_size = package_data((uint8_t *)net_input_buffer, bytes_received, server_params->source_type);
                     // MONITOR(print("Bytes received: "));
                     // MONITOR(println(bytes_received));
                     // for (int i = 0; i < packed_size; i++)
