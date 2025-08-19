@@ -32,6 +32,7 @@ typedef struct {
     protocol_packet_status_type_e server_type ; //  Type of the server, GDB, UART, or SWO
     char server_name[32] ;                      // Name of the server
     uint32_t port ;                             // Port number for the server
+    int client_fd ;                             // File descriptor for the client socket
     QueueHandle_t server_queue ;                // Handle for the server task input queue
     TaskHandle_t server_task_handle ;           // Handle for the server task
     protocol_packet_type_e source_type ;        // Source type of the server, GDB, UART, or SWO

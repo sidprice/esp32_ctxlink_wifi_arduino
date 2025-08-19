@@ -64,6 +64,7 @@ constexpr uint32_t wifi_comms_queue_length = 4;
     PROTOCOL_PACKET_STATUS_TYPE_GDB_CLIENT,
     "GDB",
     GDB_SERVER_PORT,
+    0,
     NULL,   // Server queue
     NULL,   // Server task handle
     PROTOCOL_PACKET_TYPE_FROM_GDB,
@@ -260,7 +261,9 @@ void task_wifi(void *pvParameters)
                     //
                     // Assert ESP32 READY to ensure ctxLink knows
                     //
-                    set_ready();
+                    // TODO Not sure this is the right place for this. What happens if Wi-Fi is not connected?
+                    //
+                    control_esp32_ready(true);
                     vTaskDelay(pdMS_TO_TICKS(1000));
                     xQueueSend(spi_comms_queue, &message, 0);   // Send network information to SPI task
                     break;

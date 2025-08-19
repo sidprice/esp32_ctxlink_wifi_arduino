@@ -48,6 +48,7 @@ constexpr uint32_t spi_comms_queue_length = 10;
  */
 QueueHandle_t spi_comms_queue;
 
+portMUX_TYPE my_lock = portMUX_INITIALIZER_UNLOCKED;
 /**
  * @brief Get the next SPI buffer
  *
@@ -59,8 +60,11 @@ QueueHandle_t spi_comms_queue;
 uint8_t get_next_spi_buffer_index(void)
 {
     static uint8_t buffer_index = 0;
+    portENTER_CRITICAL(&my_lock);
     uint8_t next_buffer = buffer_index;
     buffer_index = (buffer_index + 1) % SPI_BUFFER_COUNT;
+    portEXIT_CRITICAL(&my_lock);
+    MON_PRINTF("Index: %d\r\n", next_buffer);
     return next_buffer;
 }
 

@@ -15,6 +15,7 @@
 
 #include "serial_control.h"
 #include "task_server.h"
+#include "task_client.h"
 #include "task_spi_comms.h"
 #include "protocol.h"
 
@@ -22,28 +23,9 @@
 
 #include "ctxlink.h"
 
-char net_input_buffer[2048]; // Data received from network
-
 QueueHandle_t server_queue;
 
-constexpr uint32_t server_queue_length = 16;
-
-/**
- * @brief Send the client state to the ctxLink
- *
- * @param server_params The server task parameters
- * @param state The state of the client (0x01 = connected, 0x00 = disconnected)
- */
-void server_client_state_to_ctxlink(server_task_params_t *server_params, uint8_t state)
-{
-    protocol_packet_status_s status_packet ;
-    status_packet.type = server_params->server_type; // Indicate the server type
-    status_packet.status = state; // 0x01 = connected, 0x00 = disconnected
-    uint8_t *message = get_next_spi_buffer();
-    memcpy(message, &status_packet, sizeof(protocol_packet_status_s));
-    package_data(message, sizeof(protocol_packet_status_s), PROTOCOL_PACKET_TYPE_STATUS);
-    xQueueSend(spi_comms_queue, &message, 0);
-}
+constexpr uint32_t server_queue_length = 32;
 
 /**
  * @brief Configure the server
@@ -122,14 +104,13 @@ void task_wifi_server(void *pvParameters)
             MONITOR(println("Client connected"));
             // Set the client socket to non-blocking mode
             int flags = fcntl(client_fd, F_GETFL, 0);
-            // int flags = 1 ;
-            fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
             flags = 1;
             setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+            server_params->client_fd = client_fd; // Save the client file descriptor for the client task
             //
-            // Inform ctxLink GDB client connected
+            // Start a task to handle this new client
             //
-            server_client_state_to_ctxlink(server_params, 0x01);
+            xTaskCreate(task_client, "ClientTask", 4096, (void *)server_params, 5, NULL);
             //
             //  Server data handling loop
             //
@@ -140,7 +121,7 @@ void task_wifi_server(void *pvParameters)
                 //
                 // Check for packets from SPI task
                 //
-                result = xQueueReceive(server_queue, &message, 0); // Do not block here
+                result = xQueueReceive(server_queue, &message, portMAX_DELAY);
                 if (result == pdTRUE)
                 {
                     size_t bytes_sent;
@@ -152,6 +133,7 @@ void task_wifi_server(void *pvParameters)
                     switch (packet_type)
                     {
                         case PROTOCOL_PACKET_TYPE_TO_CLIENT: {
+                            MON_NL("Packet to client");
                             while(packet_size > 0)
                             {
                                 bytes_sent = send(client_fd, packet_data, packet_size, 0);
@@ -193,58 +175,6 @@ void task_wifi_server(void *pvParameters)
                             MON_NL("Unknown packet type received");
                             break;
                     }
-                }
-                int bytes_received = read(client_fd, &net_input_buffer, sizeof(net_input_buffer));
-                if (bytes_received > 0)
-                {
-                    size_t packed_size;
-                    //
-                    // Send input to the SPI task for forwarding to ctxLink
-                    //
-                    packed_size = package_data((uint8_t *)net_input_buffer, bytes_received, server_params->source_type);
-                    // MONITOR(print("Bytes received: "));
-                    // MONITOR(println(bytes_received));
-                    // for (int i = 0; i < packed_size; i++)
-                    // {
-                    //     MONITOR(printf("%02x ", net_input_buffer[i]));
-                    // }
-                    // MONITOR(println());
-                    uint8_t *input_message = (uint8_t *)net_input_buffer;
-                    TOGGLE_PIN(PINA) ;
-                    xQueueSend(spi_comms_queue, &input_message, 0);
-                }
-                else if (bytes_received == 0)
-                {
-                    MONITOR(println("Client disconnected"));
-                    close(client_fd);
-                    client_fd = -1;
-                    //
-                    // Inform ctxLink the client disconnected
-                    //
-                    server_client_state_to_ctxlink(server_params, 0x00);
-                    break;
-                }
-                else if (errno == EAGAIN || errno == EWOULDBLOCK)
-                {
-                    // No data available, continue the loop
-                    // vTaskDelay(10 / portTICK_PERIOD_MS); // Yield to other tasks
-                }
-                else if (errno == ECONNRESET)
-                {
-                    MONITOR(println("Client disconnected abruptly (ECONNRESET)"));
-                    close(client_fd);
-                    client_fd = -1;
-                    server_client_state_to_ctxlink(server_params, 0x00);
-                    break;
-                }
-                else
-                {
-                    MONITOR(print("Socket read failed: "));
-                    MONITOR(println(errno));
-                    close(client_fd);
-                    client_fd = -1;
-                    server_client_state_to_ctxlink(server_params, 0x00);
-                    break;
                 }
             }
         }
