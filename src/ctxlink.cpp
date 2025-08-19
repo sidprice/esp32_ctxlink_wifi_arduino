@@ -60,7 +60,6 @@ void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer)
 void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg)
 {
   digitalWrite(ATTN, HIGH);       // Set ATTN line high to indicate data is not ready to be read by ctxLink
-  digitalWrite(nSPI_READY, HIGH); // Set nSPI_READY line high to indicate ESP32 SPI Transfer is not ready
   //
   if (is_tx == false)
   {
@@ -77,6 +76,7 @@ void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg
 void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans, void *arg)
 {
   digitalWrite(nSPI_READY, LOW); // Tell ctxLink the transaction is ready to go.
+  digitalWrite(nSPI_READY, HIGH); // Just need an edge to trigger the STM32
 }
 
 /**
