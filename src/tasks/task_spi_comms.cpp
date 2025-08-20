@@ -107,6 +107,10 @@ void task_spi_comms(void *pvParameters)
 {
     static uint8_t *message;
     spi_comms_queue = xQueueCreate(spi_comms_queue_length, sizeof(uint8_t *)); // Create the queue for the SPI task
+    //
+    // TODO is this a god place for this?
+    //
+    system_setup_done = true ;
 
     while (true)
     {

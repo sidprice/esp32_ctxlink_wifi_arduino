@@ -37,6 +37,7 @@ static constexpr uint8_t empty_response[] = {0x00, 0x00, 0x00, 0x00}; // sent to
 
 static uint8_t *tx_saved_transaction;
 
+bool system_setup_done = false;
 /**
  * @brief Save the passed transaction packet pointer for later transmission
  *
@@ -90,7 +91,8 @@ void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans, void *arg)
  */
 void spi_ss_activated(void)
 {
-  if (digitalRead(nREADY) == LOW)
+  // control_esp32_ready(false); // De-assert ESP32 is ready
+  if ( system_setup_done )
   {
     if (digitalRead(ATTN) == LOW)
     { // Is this a TX transaction?

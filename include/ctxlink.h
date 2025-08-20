@@ -20,6 +20,8 @@ constexpr uint8_t PINA = 3; // Test Pin
 constexpr uint8_t PINB = 4; // Test Pin
 constexpr uint8_t PINC = 5; // Test Pin
 
+extern bool system_setup_done;
+
 void initCtxLink(void);
 void set_ready(void);
 void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer);
