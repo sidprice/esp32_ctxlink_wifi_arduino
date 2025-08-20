@@ -60,7 +60,8 @@ void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer)
  */
 void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg)
 {
-  digitalWrite(ATTN, HIGH);       // Set ATTN line high to indicate data is not ready to be read by ctxLink
+  digitalWrite(nSPI_READY, HIGH); // Transaction is done, SPI not ready
+  digitalWrite(ATTN, HIGH);
   //
   if (is_tx == false)
   {
@@ -77,7 +78,6 @@ void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg
 void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans, void *arg)
 {
   digitalWrite(nSPI_READY, LOW); // Tell ctxLink the transaction is ready to go.
-  digitalWrite(nSPI_READY, HIGH); // Just need an edge to trigger the STM32
 }
 
 /**
@@ -137,7 +137,7 @@ void initCtxLink(void)
 
   // begin() after setting
   slave.begin(); // default: HSPI (please refer README for pin assignments)
-  slave.setUserPostSetupCbAndArg(userTransactionCallback, NULL);
+  slave.setUserPostSetupCbAndArg(userPostSetupCallback, NULL);
   slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
 }
 
@@ -171,7 +171,7 @@ void spi_create_pending_transaction(uint8_t *dma_tx_buffer, uint8_t *dma_rx_buff
  * in the future it may need to be asserted in there is no Wi-Fi connection.
  * This would enable ctxLink to configure the Wi-Fi.
  */
-void set_ready(void)
+void control_esp32_ready(bool ready)
 {
-  digitalWrite(nREADY, LOW);
+  digitalWrite(nREADY, ready ? LOW : HIGH);
 }
