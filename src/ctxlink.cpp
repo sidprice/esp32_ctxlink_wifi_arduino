@@ -26,6 +26,11 @@
 static const uint8_t nREADY = 8;     // GPIO pin for ctxLink nReady input
 static const uint8_t nSPI_READY = 7; // GPIO pin for ctxLink SPI ready input
 
+static const uint8_t SPI_SS_PIN   = 34; // Your custom SS pin
+static const uint8_t SPI_MISO_PIN = 37;
+static const uint8_t SPI_MOSI_PIN = 35;
+static const uint8_t SPI_SCK_PIN  = 36;
+
 static bool is_tx = false;
 
 ESP32DMASPI::Slave slave;
@@ -128,15 +133,15 @@ void initCtxLink(void)
   digitalWrite(nSPI_READY, HIGH); // Set nSPI_READY line high to indicate ESP32 SPI Transfer is not ready
   pinMode(ATTN, OUTPUT);          // Set ATTN line to output
   digitalWrite(ATTN, HIGH);       // Set ATTN line high to indicate ESP32 has no data
-  // digitalWrite(SS, HIGH);
-  pinMode(SS, INPUT_PULLUP);                                             // Set SS line to input with pullup
-  attachInterrupt(digitalPinToInterrupt(SS), spi_ss_activated, FALLING); // Attach interrupt to SS line
+  // digitalWrite(SPI_SS_PIN, HIGH);
+  pinMode(SPI_SS_PIN, INPUT_PULLUP);                                             // Set SPI_SS_PIN line to input with pullup
+  attachInterrupt(digitalPinToInterrupt(SPI_SS_PIN), spi_ss_activated, FALLING); // Attach interrupt to SPI_SS_PIN
   slave.setDataMode(SPI_MODE1);
   slave.setMaxTransferSize(BUFFER_SIZE);  // default: 4092 bytes
   slave.setQueueSize(QUEUE_SIZE);         // default: 1
 
   // begin() after setting
-  slave.begin(); // default: HSPI (please refer README for pin assignments)
+  slave.begin(HSPI,SPI_SCK_PIN, SPI_MISO_PIN, SPI_MOSI_PIN, SPI_SS_PIN);
   slave.setUserPostSetupCbAndArg(userPostSetupCallback, NULL);
   slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
 }
