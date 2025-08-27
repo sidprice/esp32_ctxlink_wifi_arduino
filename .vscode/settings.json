@@ -1,6 +1,7 @@
 {
     "cmake.ignoreCMakeListsMissing": true,
     "files.associations": {
-        "ostream": "cpp"
+        "copilot.logging.level": "debug""ostream": "cpp",
+        "queue": "cpp"
     }
 }

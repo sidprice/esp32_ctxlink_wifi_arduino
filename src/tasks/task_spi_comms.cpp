@@ -23,7 +23,7 @@
 
 #include "debug.h"
 
-#define SPI_BUFFER_COUNT 16
+#define SPI_BUFFER_COUNT 8
 
 static bool tx_inflight = false;
 
