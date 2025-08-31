@@ -29,7 +29,7 @@
  *
  * This macro toggles the specified pin. It is used for debugging purposes
  */
-#define TOGGLE_PIN(pin) digitalWrite(pin, !digitalRead(pin)) ;
+#define TOGGLE_PIN(pin) digitalWrite(pin, !digitalRead(pin));
 
 #else
 #define TOGGLE_PIN(pin)

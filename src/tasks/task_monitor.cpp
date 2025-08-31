@@ -24,16 +24,17 @@ QueueHandle_t task_monitor_queue;
  *
  * @param pvParameters Unused parameter
  */
-void task_monitor(void *pvParameters) {
-    (void)pvParameters;
-    //
-    // Create the input queue for the task
-    //
-    task_monitor_queue = xQueueCreate(MONITOR_OUTPUT_QUEUE_DEPTH, sizeof(monitor_output_message_t));
-    while (1) {
-        monitor_output_message_t message;
-        if (xQueueReceive(task_monitor_queue, &message, portMAX_DELAY) == pdTRUE) {
-            Serial.print(message.message);
-        }
-    }
+void task_monitor(void *pvParameters)
+{
+	(void)pvParameters;
+	//
+	// Create the input queue for the task
+	//
+	task_monitor_queue = xQueueCreate(MONITOR_OUTPUT_QUEUE_DEPTH, sizeof(monitor_output_message_t));
+	while (1) {
+		monitor_output_message_t message;
+		if (xQueueReceive(task_monitor_queue, &message, portMAX_DELAY) == pdTRUE) {
+			Serial.print(message.message);
+		}
+	}
 }

@@ -10,12 +10,12 @@
  */
 
 #ifndef TASK_WIFI_H
-#define TASK_WIFI_H 
+#define TASK_WIFI_H
 
 #include "task_server.h"
 
-void task_wifi(void *pvParameters) ;
+void task_wifi(void *pvParameters);
 extern server_task_params_t gdb_server_params;
 extern QueueHandle_t wifi_comms_queue;
-extern TaskHandle_t wifi_task_handle ;
+extern TaskHandle_t wifi_task_handle;
 #endif

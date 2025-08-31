@@ -39,10 +39,10 @@ static constexpr size_t BUFFER_SIZE = 2000; // should be multiple of 4
 static constexpr size_t QUEUE_SIZE = 1;
 
 static uint8_t *tx_saved_transaction;
-static uint8_t zero_transaction_buffer[BUFFER_SIZE] = {
-    0}; // Use your max transfer size
+static uint8_t zero_transaction_buffer[BUFFER_SIZE] = {0}; // Use your max transfer size
 
 bool system_setup_done = false;
+
 /**
  * @brief Save the passed transaction packet pointer for later transmission
  *
@@ -51,9 +51,10 @@ bool system_setup_done = false;
  *  We are about to start a TX transaction, so save the packet pointer and
  *  assert the ATTN signal to ctxLink.
  */
-void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer) {
-  tx_saved_transaction = transaction_buffer;
-  digitalWrite(ATTN, LOW);
+void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer)
+{
+	tx_saved_transaction = transaction_buffer;
+	digitalWrite(ATTN, LOW);
 }
 
 /**
@@ -62,14 +63,14 @@ void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer) {
  * @param trans Pointer to the transaction that was completed
  * @param arg   Unused user argument
  */
-void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans,
-                                       void *arg) {
-  digitalWrite(nSPI_READY, HIGH); // Transaction is done, SPI not ready
-  digitalWrite(ATTN, HIGH);
-  //
-  if (is_tx == false) {
-    xQueueSendFromISR(spi_comms_queue, (uint8_t *)&trans->rx_buffer, NULL);
-  }
+void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg)
+{
+	digitalWrite(nSPI_READY, HIGH); // Transaction is done, SPI not ready
+	digitalWrite(ATTN, HIGH);
+	//
+	if (is_tx == false) {
+		xQueueSendFromISR(spi_comms_queue, (uint8_t *)&trans->rx_buffer, NULL);
+	}
 }
 
 /**
@@ -78,9 +79,9 @@ void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans,
  * @param trans Pointer to the transaction that was set up
  * @param arg Unused user argument
  */
-void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans,
-                                     void *arg) {
-  digitalWrite(nSPI_READY, LOW); // Tell ctxLink the transaction is ready to go.
+void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans, void *arg)
+{
+	digitalWrite(nSPI_READY, LOW); // Tell ctxLink the transaction is ready to go.
 }
 
 /**
@@ -93,55 +94,57 @@ void IRAM_ATTR userPostSetupCallback(spi_slave_transaction_t *trans,
  *
  *  Do nothing if ESP32 is not ready!
  */
-void spi_ss_activated(void) {
-  // control_esp32_ready(false); // De-assert ESP32 is ready
-  if (system_setup_done) {
-    if (digitalRead(ATTN) == LOW) { // Is this a TX transaction?
-      // Set up a transaction to send the saved transaction buffer to ctxLink
-      spi_create_pending_transaction(tx_saved_transaction, NULL,
-                                     true); // This is a pending tx transaction
-    } else {
-      // Set up a transaction to receive data from ctxLink
-      spi_create_pending_transaction(NULL, get_next_spi_buffer(),
-                                     false); // This is a pending rx transaction
-    }
-  }
+void spi_ss_activated(void)
+{
+	// control_esp32_ready(false); // De-assert ESP32 is ready
+	if (system_setup_done) {
+		if (digitalRead(ATTN) == LOW) { // Is this a TX transaction?
+			// Set up a transaction to send the saved transaction buffer to ctxLink
+			spi_create_pending_transaction(tx_saved_transaction, NULL,
+				true); // This is a pending tx transaction
+		} else {
+			// Set up a transaction to receive data from ctxLink
+			spi_create_pending_transaction(NULL, get_next_spi_buffer(),
+				false); // This is a pending rx transaction
+		}
+	}
 }
 
 /**
  * @brief Initialize the SPI peripheral for ctxLink communication
  *
  */
-void initCtxLink(void) {
+void initCtxLink(void)
+{
 #ifdef DO_TOGGLE_PIN
-  pinMode(PINA, OUTPUT);   // Set PINA as output
-  pinMode(PINB, OUTPUT);   // Set PINB as output
-  pinMode(PINC, OUTPUT);   // Set PINC as output
-  digitalWrite(PINA, LOW); // Set PINA low
-  digitalWrite(PINB, LOW); // Set PINB low
-  digitalWrite(PINC, LOW); // Set PINC low
+	pinMode(PINA, OUTPUT);   // Set PINA as output
+	pinMode(PINB, OUTPUT);   // Set PINB as output
+	pinMode(PINC, OUTPUT);   // Set PINC as output
+	digitalWrite(PINA, LOW); // Set PINA low
+	digitalWrite(PINB, LOW); // Set PINB low
+	digitalWrite(PINC, LOW); // Set PINC low
 #endif
-  // Set up the GPIO pins for ctxLink
-  pinMode(nREADY, OUTPUT); // Set nREADY line to output
-  digitalWrite(nREADY,
-               HIGH); // Set nREADY line high to indicate ESP32 is not ready
-  pinMode(nSPI_READY, OUTPUT);    // Set nSPI_READY line to output
-  digitalWrite(nSPI_READY, HIGH); // Set nSPI_READY line high to indicate ESP32
-                                  // SPI Transfer is not ready
-  pinMode(ATTN, OUTPUT);          // Set ATTN line to output
-  digitalWrite(ATTN, HIGH); // Set ATTN line high to indicate ESP32 has no data
-  // digitalWrite(SPI_SS_PIN, HIGH);
-  pinMode(SPI_SS_PIN, INPUT_PULLUP); // Set SPI_SS_PIN line to input with pullup
-  attachInterrupt(digitalPinToInterrupt(SPI_SS_PIN), spi_ss_activated,
-                  FALLING); // Attach interrupt to SPI_SS_PIN
-  slave.setDataMode(SPI_MODE1);
-  slave.setMaxTransferSize(BUFFER_SIZE); // default: 4092 bytes
-  slave.setQueueSize(QUEUE_SIZE);        // default: 1
+	// Set up the GPIO pins for ctxLink
+	pinMode(nREADY, OUTPUT); // Set nREADY line to output
+	digitalWrite(nREADY,
+		HIGH);                      // Set nREADY line high to indicate ESP32 is not ready
+	pinMode(nSPI_READY, OUTPUT);    // Set nSPI_READY line to output
+	digitalWrite(nSPI_READY, HIGH); // Set nSPI_READY line high to indicate ESP32
+									// SPI Transfer is not ready
+	pinMode(ATTN, OUTPUT);          // Set ATTN line to output
+	digitalWrite(ATTN, HIGH);       // Set ATTN line high to indicate ESP32 has no data
+	// digitalWrite(SPI_SS_PIN, HIGH);
+	pinMode(SPI_SS_PIN, INPUT_PULLUP); // Set SPI_SS_PIN line to input with pullup
+	attachInterrupt(digitalPinToInterrupt(SPI_SS_PIN), spi_ss_activated,
+		FALLING); // Attach interrupt to SPI_SS_PIN
+	slave.setDataMode(SPI_MODE1);
+	slave.setMaxTransferSize(BUFFER_SIZE); // default: 4092 bytes
+	slave.setQueueSize(QUEUE_SIZE);        // default: 1
 
-  // begin() after setting
-  slave.begin(HSPI, SPI_SCK_PIN, SPI_MISO_PIN, SPI_MOSI_PIN, SPI_SS_PIN);
-  slave.setUserPostSetupCbAndArg(userPostSetupCallback, NULL);
-  slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
+	// begin() after setting
+	slave.begin(HSPI, SPI_SCK_PIN, SPI_MISO_PIN, SPI_MOSI_PIN, SPI_SS_PIN);
+	slave.setUserPostSetupCbAndArg(userPostSetupCallback, NULL);
+	slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
 }
 
 /**
@@ -155,33 +158,31 @@ void initCtxLink(void) {
  *        transaction will be removed from the queue, and a new one
  *        created after the slave packet has been sent to the master.
  */
-void spi_create_pending_transaction(uint8_t *dma_tx_buffer,
-                                    uint8_t *dma_rx_buffer, bool isTx) {
-  //
-  // TODO Move this line to the nCS processing? Seems like ALL transaction are
-  // considered tx?
-  //
-  is_tx = isTx; // Set the transaction type
-  // with user-defined ISR callback that is called before/after transaction
-  // start you can set these callbacks and arguments before each queue()
-  slave.setUserPostSetupCbAndArg(userPostSetupCallback, NULL);
-  slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
-  //
-  // Set up the transaction buffers depending upon the transfer direction
-  //
-  // Replace NULL pointers with pointers to buffers filled with zeroes.
-  //
-  // Note: Only a single zero-filled buffer is provided since one of the RX/TX
-  // buffers must be valid!
-  //
-  // This keeps the buffers valid, even when not supplied by the caller
-  //
-  const uint8_t *tx_buf_to_use =
-      (dma_tx_buffer == NULL) ? zero_transaction_buffer : dma_tx_buffer;
-  uint8_t *rx_buf_to_use =
-      (dma_rx_buffer == NULL) ? zero_transaction_buffer : dma_rx_buffer;
-  slave.queue(tx_buf_to_use, rx_buf_to_use, BUFFER_SIZE);
-  slave.trigger();
+void spi_create_pending_transaction(uint8_t *dma_tx_buffer, uint8_t *dma_rx_buffer, bool isTx)
+{
+	//
+	// TODO Move this line to the nCS processing? Seems like ALL transaction are
+	// considered tx?
+	//
+	is_tx = isTx; // Set the transaction type
+	// with user-defined ISR callback that is called before/after transaction
+	// start you can set these callbacks and arguments before each queue()
+	slave.setUserPostSetupCbAndArg(userPostSetupCallback, NULL);
+	slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
+	//
+	// Set up the transaction buffers depending upon the transfer direction
+	//
+	// Replace NULL pointers with pointers to buffers filled with zeroes.
+	//
+	// Note: Only a single zero-filled buffer is provided since one of the RX/TX
+	// buffers must be valid!
+	//
+	// This keeps the buffers valid, even when not supplied by the caller
+	//
+	const uint8_t *tx_buf_to_use = (dma_tx_buffer == NULL) ? zero_transaction_buffer : dma_tx_buffer;
+	uint8_t *rx_buf_to_use = (dma_rx_buffer == NULL) ? zero_transaction_buffer : dma_rx_buffer;
+	slave.queue(tx_buf_to_use, rx_buf_to_use, BUFFER_SIZE);
+	slave.trigger();
 }
 
 /**
@@ -191,6 +192,7 @@ void spi_create_pending_transaction(uint8_t *dma_tx_buffer,
  * in the future it may need to be asserted in there is no Wi-Fi connection.
  * This would enable ctxLink to configure the Wi-Fi.
  */
-void control_esp32_ready(bool ready) {
-  digitalWrite(nREADY, ready ? LOW : HIGH);
+void control_esp32_ready(bool ready)
+{
+	digitalWrite(nREADY, ready ? LOW : HIGH);
 }

@@ -49,6 +49,7 @@ constexpr uint32_t spi_comms_queue_length = 10;
 QueueHandle_t spi_comms_queue;
 
 portMUX_TYPE my_lock = portMUX_INITIALIZER_UNLOCKED;
+
 /**
  * @brief Get the next SPI buffer
  *
@@ -59,13 +60,13 @@ portMUX_TYPE my_lock = portMUX_INITIALIZER_UNLOCKED;
  */
 uint8_t get_next_spi_buffer_index(void)
 {
-    static uint8_t buffer_index = 0;
-    portENTER_CRITICAL(&my_lock);
-    uint8_t next_buffer = buffer_index;
-    buffer_index = (buffer_index + 1) % SPI_BUFFER_COUNT;
-    portEXIT_CRITICAL(&my_lock);
-    MON_PRINTF("Index: %d\r\n", next_buffer);
-    return next_buffer;
+	static uint8_t buffer_index = 0;
+	portENTER_CRITICAL(&my_lock);
+	uint8_t next_buffer = buffer_index;
+	buffer_index = (buffer_index + 1) % SPI_BUFFER_COUNT;
+	portEXIT_CRITICAL(&my_lock);
+	MON_PRINTF("Index: %d\r\n", next_buffer);
+	return next_buffer;
 }
 
 /**
@@ -75,7 +76,7 @@ uint8_t get_next_spi_buffer_index(void)
  */
 uint8_t *get_next_spi_buffer(void)
 {
-    return spi_buffers[get_next_spi_buffer_index()];
+	return spi_buffers[get_next_spi_buffer_index()];
 }
 
 /**
@@ -86,7 +87,7 @@ uint8_t *get_next_spi_buffer(void)
  */
 uint8_t *get_spi_buffer(uint8_t index)
 {
-    return spi_buffers[index];
+	return spi_buffers[index];
 }
 
 /**
@@ -105,77 +106,71 @@ uint8_t *get_spi_buffer(uint8_t index)
 
 void task_spi_comms(void *pvParameters)
 {
-    static uint8_t *message;
-    spi_comms_queue = xQueueCreate(spi_comms_queue_length, sizeof(uint8_t *)); // Create the queue for the SPI task
-    //
-    // TODO is this a god place for this?
-    //
-    system_setup_done = true ;
+	static uint8_t *message;
+	spi_comms_queue = xQueueCreate(spi_comms_queue_length, sizeof(uint8_t *)); // Create the queue for the SPI task
+	//
+	// TODO is this a god place for this?
+	//
+	system_setup_done = true;
 
-    while (true)
-    {
-        // Wait for a message from the other tasks or spi driver
-        xQueueReceive(spi_comms_queue, &message, portMAX_DELAY);
-        //
-        // Process the message
-        //
-        size_t data_length;
-        size_t packet_size;
-        protocol_packet_type_e packet_type;
-        uint8_t *packet_data;
-        packet_size = protocol_split(message, &data_length, &packet_type, &packet_data);
-        switch (packet_type)
-        {
-        case PROTOCOL_PACKET_TYPE_EMPTY:
-        {
-            MON_NL("TX done?");
-            break;
-        }
-        case PROTOCOL_PACKET_TYPE_TO_GDB:
-        {
-            //
-            // Send the packet to the server task
-            //
-            //
-            // Change the message type so that the server routes it correctly.
-            //
-            // The server parameters ensure the message is routed to the right
-            // server task.
-            //
-            *(message+PACKET_HEADER_SOURCE_ID) = PROTOCOL_PACKET_TYPE_TO_CLIENT;
-            //
-            // TODO Need to check if there is a client attached to GDB server
-            //
+	while (true) {
+		// Wait for a message from the other tasks or spi driver
+		xQueueReceive(spi_comms_queue, &message, portMAX_DELAY);
+		//
+		// Process the message
+		//
+		size_t data_length;
+		size_t packet_size;
+		protocol_packet_type_e packet_type;
+		uint8_t *packet_data;
+		packet_size = protocol_split(message, &data_length, &packet_type, &packet_data);
+		switch (packet_type) {
+		case PROTOCOL_PACKET_TYPE_EMPTY: {
+			MON_NL("TX done?");
+			break;
+		}
+		case PROTOCOL_PACKET_TYPE_TO_GDB: {
+			//
+			// Send the packet to the server task
+			//
+			//
+			// Change the message type so that the server routes it correctly.
+			//
+			// The server parameters ensure the message is routed to the right
+			// server task.
+			//
+			*(message + PACKET_HEADER_SOURCE_ID) = PROTOCOL_PACKET_TYPE_TO_CLIENT;
+			//
+			// TODO Need to check if there is a client attached to GDB server
+			//
 
-            xQueueSend(gdb_server_params.server_queue, &message, portMAX_DELAY); // Send the message to the gdb server task
-            break;
-        }
+			xQueueSend(
+				gdb_server_params.server_queue, &message, portMAX_DELAY); // Send the message to the gdb server task
+			break;
+		}
 
-        case PROTOCOL_PACKET_TYPE_SET_NETWORK_INFO: {
-            //
-            // Send the packet to the Wi-Fi task
-            //
-            xQueueSend(wifi_comms_queue, &message, portMAX_DELAY); // Send the message to the Wi-Fi task
-            break;
-        }
-        //
-        // The following cases fall-through to common code
-        // to send the received message to ctxLink
-        //
-        case PROTOCOL_PACKET_TYPE_NETWORK_INFO:
-        case PROTOCOL_PACKET_TYPE_FROM_GDB:
-        case PROTOCOL_PACKET_TYPE_STATUS:
-        {
-            spi_save_tx_transaction_buffer(message); // Save the transaction buffer for SPI driver
-            TOGGLE_PIN(PINB);
-            break;
-        }
-        default:
-        {
-
-            MON_PRINTF("Unknown packet type -> %d", packet_type);
-            break;
-        }
-        }
-    }
+		case PROTOCOL_PACKET_TYPE_SET_NETWORK_INFO: {
+			//
+			// Send the packet to the Wi-Fi task
+			//
+			xQueueSend(wifi_comms_queue, &message, portMAX_DELAY); // Send the message to the Wi-Fi task
+			break;
+		}
+		//
+		// The following cases fall-through to common code
+		// to send the received message to ctxLink
+		//
+		case PROTOCOL_PACKET_TYPE_NETWORK_INFO:
+		case PROTOCOL_PACKET_TYPE_FROM_GDB:
+		case PROTOCOL_PACKET_TYPE_STATUS: {
+			spi_save_tx_transaction_buffer(message); // Save the transaction buffer for SPI driver
+			TOGGLE_PIN(PINB);
+			break;
+		}
+		default: {
+			MON_PRINTF("Unknown packet type -> %d", packet_type);
+			break;
+		}
+		}
+	}
 }

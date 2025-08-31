@@ -37,7 +37,7 @@ extern QueueHandle_t task_monitor_queue;
  * 
  */
 typedef struct {
-    char message[MONITOR_OUTPUT_MAX_LENGTH];
+	char message[MONITOR_OUTPUT_MAX_LENGTH];
 } monitor_output_message_t;
 
 /**

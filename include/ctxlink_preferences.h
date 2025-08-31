@@ -15,7 +15,7 @@
 
 #include <Arduino.h>
 
-void preferences_init(void) ;
-size_t preferences_get_wifi_parameters(char *ssid, char *password) ;
-void preferences_save_wifi_parameters(char *ssid, char *password) ;
+void preferences_init(void);
+size_t preferences_get_wifi_parameters(char *ssid, char *password);
+void preferences_save_wifi_parameters(char *ssid, char *password);
 #endif // CTXLINK_PREFERENCES_H

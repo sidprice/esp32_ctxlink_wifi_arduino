@@ -14,15 +14,14 @@
 
 #include <Arduino.h>
 
-#define CUSTOM_ASSERT(expr)                                                    \
-  do {                                                                         \
-    if (!(expr)) {                                                             \
-      Serial.printf("Assertion failed: %s, file %s, line %d\n", #expr,         \
-                    __FILE__, __LINE__);                                       \
-      while (true) {                                                           \
-        delay(1000);                                                           \
-      }                                                                        \
-    }                                                                          \
-  } while (0)
+#define CUSTOM_ASSERT(expr)                                                                       \
+	do {                                                                                          \
+		if (!(expr)) {                                                                            \
+			Serial.printf("Assertion failed: %s, file %s, line %d\n", #expr, __FILE__, __LINE__); \
+			while (true) {                                                                        \
+				delay(1000);                                                                      \
+			}                                                                                     \
+		}                                                                                         \
+	} while (0)
 
 #endif // CUSTOM_ASSERT_H

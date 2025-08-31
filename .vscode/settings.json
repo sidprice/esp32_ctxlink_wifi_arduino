@@ -1,11 +1,7 @@
 {
     "cmake.ignoreCMakeListsMissing": true,
     "files.associations": {
-        "copilot.logging.level": "debug""ostream": "cpp",
         "queue": "cpp"
     },
-    "editor.defaultFormatter": "xaver.clang-format",
-    "files.exclude": {
-        "**/.pio": true
-    }
+    "editor.defaultFormatter": "xaver.clang-format"
 }

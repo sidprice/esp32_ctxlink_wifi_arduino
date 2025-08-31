@@ -9,5 +9,5 @@
  * 
  */
 
-void ota_setup(void) ;
-void otaKick(void) ;
+void ota_setup(void);
+void otaKick(void);
