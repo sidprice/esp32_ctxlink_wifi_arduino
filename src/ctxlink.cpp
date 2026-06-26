@@ -150,13 +150,9 @@ void initCtxLink(void)
 /**
  * @brief Create a SPI transaction with the ctxLink module
  *
- * The slave must always be prepared for the master to send
- * a transaction. This pending transaction is created to service
- * a transaction from the master.
- *
- * Note:  When the slave has a packet to send to the master, the pending
- *        transaction will be removed from the queue, and a new one
- *        created after the slave packet has been sent to the master.
+ * @param dma_tx_buffer Pointer to the buffer containing data to be sent to ctxLink
+ * @param dma_rx_buffer Pointer to the buffer where received data from ctxLink should be stored
+ * @param isTx          Boolean indicating whether this is a TX transaction (true) or RX transaction (false)
  */
 void spi_create_pending_transaction(uint8_t *dma_tx_buffer, uint8_t *dma_rx_buffer, bool isTx)
 {
@@ -165,8 +161,7 @@ void spi_create_pending_transaction(uint8_t *dma_tx_buffer, uint8_t *dma_rx_buff
 	// considered tx?
 	//
 	is_tx = isTx; // Set the transaction type
-	// with user-defined ISR callback that is called before/after transaction
-	// start you can set these callbacks and arguments before each queue()
+
 	slave.setUserPostSetupCbAndArg(userPostSetupCallback, NULL);
 	slave.setUserPostTransCbAndArg(userTransactionCallback, NULL);
 	//
@@ -189,7 +184,7 @@ void spi_create_pending_transaction(uint8_t *dma_tx_buffer, uint8_t *dma_rx_buff
  * @brief Indicate to ctxLink the ESP32 is ready
  *
  * Initially this is asserted once a wireless connection is made, however
- * in the future it may need to be asserted in there is no Wi-Fi connection.
+ * in the future it may need to be asserted if there is no Wi-Fi connection.
  * This would enable ctxLink to configure the Wi-Fi.
  */
 void control_esp32_ready(bool ready)
