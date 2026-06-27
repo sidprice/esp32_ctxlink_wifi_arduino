@@ -20,8 +20,6 @@
 #include "tasks/task_spi_comms.h"
 #include "debug.h"
 
-static char net_input_buffer[2048]; // Data received from network
-
 /**
  * @brief Send the client state to the ctxLink
  *
@@ -55,13 +53,14 @@ void task_client(void *pvParameters)
 	//
 	server_client_state_to_ctxlink(server_params, 0x01);
 	while (true) {
-		int bytes_received = read(client_fd, &net_input_buffer, sizeof(net_input_buffer));
+		uint8_t *net_input_buffer = get_next_spi_buffer();
+		int bytes_received = read(client_fd, net_input_buffer, SPI_BUFFER_SIZE);
 		if (bytes_received > 0) {
 			size_t packed_size;
 			//
 			// Send input to the SPI task for forwarding to ctxLink
 			//
-			packed_size = package_data((uint8_t *)net_input_buffer, bytes_received, server_params->source_type);
+			packed_size = package_data(net_input_buffer, bytes_received, server_params->source_type);
 			MON_PRINTF("Bytes received: %d\r\n", bytes_received);
 			// MONITOR(print("Bytes received: "));
 			// MONITOR(println(bytes_received));
@@ -70,9 +69,7 @@ void task_client(void *pvParameters)
 			//     MONITOR(printf("%02x ", net_input_buffer[i]));
 			// }
 			// MONITOR(println());
-			uint8_t *input_message = (uint8_t *)net_input_buffer;
-			TOGGLE_PIN(PINA);
-			xQueueSend(spi_comms_queue, &input_message, 0);
+			xQueueSend(spi_comms_queue, &net_input_buffer, 0);
 		} else if (bytes_received == 0) {
 			MONITOR(println("Client disconnected"));
 			close(client_fd);
