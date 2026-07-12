@@ -100,10 +100,12 @@ void task_wifi_server(void *pvParameters)
 				return; // TODO Deal with error, cannot return!
 			}
 			MONITOR(println("Client connected"));
-			// Set the client socket to non-blocking mode
-			int flags = fcntl(client_fd, F_GETFL, 0);
-			flags = 1;
-			setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+			//
+			// Disable Nagle's algorithm for the client socket to reduce latency
+			//
+			int tcp_nodelay = fcntl(client_fd, F_GETFL, 0);
+			tcp_nodelay = 1;
+			setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &tcp_nodelay, sizeof(tcp_nodelay));
 			server_params->client_fd = client_fd; // Save the client file descriptor for the client task
 			//
 			// Start a task to handle this new client
