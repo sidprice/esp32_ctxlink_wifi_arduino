@@ -69,6 +69,7 @@ void task_client(void *pvParameters)
 			//     MONITOR(printf("%02x ", net_input_buffer[i]));
 			// }
 			// MONITOR(println());
+			ctxlink_toggle_nReady();
 			xQueueSend(spi_comms_queue, &net_input_buffer, 0);
 		} else if (bytes_received == 0) {
 			MONITOR(println("Client disconnected"));
@@ -81,6 +82,7 @@ void task_client(void *pvParameters)
 			break;
 		} else if (errno == EAGAIN || errno == EWOULDBLOCK) {
 			// No data available, continue the loop
+			MONITOR(println("Would block socket state"));
 			// vTaskDelay(10 / portTICK_PERIOD_MS); // Yield to other tasks
 		} else if (errno == ECONNRESET) {
 			MONITOR(println("Client disconnected abruptly (ECONNRESET)"));

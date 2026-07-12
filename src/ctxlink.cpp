@@ -191,3 +191,12 @@ void control_esp32_ready(bool ready)
 {
 	digitalWrite(nREADY, ready ? LOW : HIGH);
 }
+
+/**
+ * @brief A debug aid, not used as a part of the ctxLink Interface.
+ * 
+ */
+void ctxlink_toggle_nReady(void)
+{
+	digitalWrite(nREADY, digitalRead(nREADY) == HIGH ? LOW : HIGH);
+}

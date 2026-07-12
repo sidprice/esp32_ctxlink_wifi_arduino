@@ -16,6 +16,7 @@
 
 constexpr uint8_t ATTN = 9; // GPIO pin for ctxLink ATTN input
 
+// TODO Remove these and any supporting code, not available on PCB v2.1
 constexpr uint8_t PINA = 3; // Test Pin
 constexpr uint8_t PINB = 4; // Test Pin
 constexpr uint8_t PINC = 5; // Test Pin
@@ -26,4 +27,6 @@ void initCtxLink(void);
 void control_esp32_ready(bool ready);
 void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer);
 void spi_create_pending_transaction(uint8_t *tx_buffer, uint8_t *rx_buffer, bool isTx);
+
+void ctxlink_toggle_nReady(void);
 #endif // CTXLINK_H
