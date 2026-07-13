@@ -124,7 +124,11 @@ void wifi_send_server_command(protocol_command_type_e command)
 		protocol_packet_command_s cmd_packet = {0};
 		cmd_packet.type = PROTOCOL_PACKET_TYPE_CMD;
 		cmd_packet.command = command;
-		xQueueSend(server_queue, &cmd_packet, 0); // Send command to GDB server task
+
+		uint8_t *message = get_next_spi_buffer();
+		memcpy(message, &cmd_packet, sizeof(cmd_packet));
+		package_data(message, sizeof(cmd_packet), PROTOCOL_PACKET_TYPE_COMMAND);
+		xQueueSend(server_queue, &message, 0); // Send command packet pointer to GDB server task
 	}
 }
 
