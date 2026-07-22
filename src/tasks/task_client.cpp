@@ -26,7 +26,7 @@
  * @param server_params The server task parameters
  * @param state The state of the client (0x01 = connected, 0x00 = disconnected)
  */
-void server_client_state_to_ctxlink(server_task_params_t *server_params, uint8_t state)
+void send_client_state_to_ctxlink(server_task_params_t *server_params, uint8_t state)
 {
 	protocol_packet_status_s status_packet;
 	status_packet.type = server_params->server_type; // Indicate the server type
@@ -51,7 +51,7 @@ void task_client(void *pvParameters)
 	//
 	// Inform ctxLink GDB client connected
 	//
-	server_client_state_to_ctxlink(server_params, 0x01);
+	send_client_state_to_ctxlink(server_params, 0x01);
 	while (true) {
 		uint8_t *net_input_buffer = get_next_spi_buffer();
 		int bytes_received = read(client_fd, net_input_buffer, SPI_BUFFER_SIZE);
@@ -78,7 +78,7 @@ void task_client(void *pvParameters)
 			//
 			// Inform ctxLink the client disconnected
 			//
-			server_client_state_to_ctxlink(server_params, 0x00);
+			send_client_state_to_ctxlink(server_params, 0x00);
 			break;
 		} else if (errno == EAGAIN || errno == EWOULDBLOCK) {
 			// No data available, continue the loop
@@ -88,14 +88,14 @@ void task_client(void *pvParameters)
 			MONITOR(println("Client disconnected abruptly (ECONNRESET)"));
 			close(client_fd);
 			client_fd = -1;
-			server_client_state_to_ctxlink(server_params, 0x00);
+			send_client_state_to_ctxlink(server_params, 0x00);
 			break;
 		} else {
 			MONITOR(print("Socket read failed: "));
 			MONITOR(println(errno));
 			close(client_fd);
 			client_fd = -1;
-			server_client_state_to_ctxlink(server_params, 0x00);
+			send_client_state_to_ctxlink(server_params, 0x00);
 			break;
 		}
 	}
