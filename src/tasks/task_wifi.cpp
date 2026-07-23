@@ -11,7 +11,7 @@
 
 #include "serial_control.h"
 #include <Arduino.h>
-#include <WiFi.h>
+#include "..\wifi-tools\wifi_tools.h"
 
 #include "ctxlink_preferences.h"
 #include "protocol.h"
@@ -84,37 +84,6 @@ TaskHandle_t gdb_task_handle = NULL;
 QueueHandle_t wifi_comms_queue;
 
 /**
- * @brief Previous Wi-Fi status
- *
- * This is used to detect changes in the Wi-Fi status.
- */
-static wl_status_t previous_status = WL_NO_SHIELD;
-
-/**
- * @brief Handle Wi-Fi events
- *
- */
-void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info)
-{
-	MON_PRINTF("Wi-Fi event: %d\r\n", event);
-	previous_status = wifi_status; // Store the previous status
-	switch (event) {
-	case WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP: {
-		MON_NL("Wi-Got IP Address");
-		xTaskNotifyGive(wifi_task_handle);
-		break;
-	}
-	case WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED: {
-		MON_NL("Wi-Fi Disconnected");
-		xTaskNotifyGive(wifi_task_handle);
-		break;
-	}
-	default:
-		break;
-	}
-}
-
-/**
  * @brief Send a command to the server task to shut down the server
  *
  */
@@ -134,50 +103,13 @@ void wifi_send_server_command(protocol_command_type_e command)
 
 void wifi_disconnect(void)
 {
-	if (WiFi.status() == WL_CONNECTED) {
+	if (wifi_tools.is_connected) {
 		MON_NL("Disconnecting Wi-Fi");
 		WiFi.disconnect();
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Wait completed disconnect
 		MON_NL("#2");
 	}
 } // deinitWiFi() end
-
-wl_status_t wifi_connect(void)
-{
-	//
-	// Set up the Wi-Fi Station
-	//
-	// TODO Set the hostname to something unique, using MAC perhaps?
-	//
-	WiFi.setHostname("ctxLink_adapter_1");
-	MON_PRINTF("Hostname = %s\r\n", WiFi.getHostname());
-	MON_NL("Connecting to WiFi.");
-
-	uint32_t retry = 10;
-
-	wifi_status = WiFi.begin(ssid, password);
-	MON_PRINTF("SSID: %s\r\n", ssid);
-	MON_PRINTF("Passphrase: %s\r\n", password);
-	ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Wait completed connect
-	do {
-		wifi_status = WiFi.status();
-		if (wifi_status == WL_CONNECTED) {
-			break;
-		}
-		vTaskDelay(1000);
-		MON(".");
-	} while (retry--);
-	MON("\r\n");
-	if (wifi_status == WL_CONNECTED) {
-		MON_PRINTF("IP Address: %s\r\n", WiFi.localIP().toString().c_str());
-		MON_PRINTF("RSSI: %d\r\n", WiFi.RSSI());
-		preferences_save_wifi_parameters(ssid, password);
-	} else {
-		MON_PRINTF("Wi-Fi status = %d\r\n", wifi_status);
-		MON_NL("Failed to connect to Wi-Fi");
-	}
-	return wifi_status;
-} // configWiFi() end
 
 void wifi_get_net_info(void)
 {
@@ -190,14 +122,33 @@ void wifi_get_net_info(void)
 	xQueueSend(spi_comms_queue, &message, 0);
 }
 
+/**
+ * @brief Initialize and start the Wi-Fi connection
+ *
+ * @param ssid The SSID of the Wi-Fi network
+ * @param password The password of the Wi-Fi network
+ */
+void wifi_startup(const char *ssid, const char *password)
+{
+	wifi_tools.log_events();
+	wifi_tools.begin(ssid, password);
+}
+
+/**
+ * @brief Wi-Fi task
+ *
+ * This task handles Wi-Fi connectivity and reconnection logic.
+ */
 void task_wifi(void *pvParameters)
 {
 	(void)pvParameters; // Unused parameter
-	BaseType_t result;
-	static uint8_t *message;
+	bool wifi_connect_processed = false;
+	bool wifi_disconnect_processed = false;
+	//
+	// Create the input message queue
 	//
 	wifi_comms_queue = xQueueCreate(wifi_comms_queue_length,
-		sizeof(uint8_t *)); // Create the queue for the SPI task
+		sizeof(uint8_t *)); // Create the queue for the task
 	//
 	// Get the wi-fi settings from preferences
 	//
@@ -206,20 +157,60 @@ void task_wifi(void *pvParameters)
 	size_t settings_count = preferences_get_wifi_parameters(ssid, password);
 	MON_PRINTF("SSID: %s\r\n", (char *)ssid);
 	MON_PRINTF("Passphrase: %s\r\n", (char *)password);
-	WiFi.onEvent(onWiFiEvent,
-		WiFiEvent_t::ARDUINO_EVENT_MAX); // Register the Wi-Fi event handler
-	wifi_connect();                      // Attempt to connect to Wi-Fi
-	while (1) {
-		wifi_status = WiFi.status();
+	wifi_startup(ssid, password);
+	//
+	// Task working loop
+	//
+	while (true) {
+		BaseType_t result;
+		static uint8_t *message;
 		//
-		// Has the wifi status changed?
-		//
-		if (wifi_status != previous_status) {
-			MON_PRINTF("Wi-Fi status changed = %d\r\n", wifi_status);
-			previous_status = wifi_status;
-
-			switch (wifi_status) {
-			case WL_CONNECTED: {
+		result = xQueueReceive(wifi_comms_queue, &message, pdMS_TO_TICKS(10));
+		if (result == pdTRUE) {
+			size_t data_length;
+			size_t packet_size;
+			protocol_packet_type_e packet_type;
+			uint8_t *packet_data;
+			packet_size = protocol_split(message, &data_length, &packet_type, &packet_data);
+			//
+			// Process the received packet
+			//
+			network_connection_info_s *conn_info = (network_connection_info_s *)packet_data;
+			MON_NL("Network info received");
+			MON_PRINTF("SSID: %s\r\n", conn_info->network_ssid);
+			MON_PRINTF("Passphrase: %s\r\n", conn_info->pass_phrase);
+			//
+			// Check if the Wi-Fi is already connected
+			//
+			if (wifi_tools.is_connected) {
+				//
+				// Check if the network information has changed
+				//
+				if (strcmp(ssid, conn_info->network_ssid) != 0 || strcmp(password, conn_info->pass_phrase) != 0) {
+					MON_NL("Wi-Fi credentials changed, reconnecting...");
+					memset(&network_info, 0, sizeof(network_connection_info_s));
+					strncpy(ssid, conn_info->network_ssid, MAX_SSID_LENGTH);
+					strncpy(password, conn_info->pass_phrase, MAX_PASS_PHRASE_LENGTH);
+					wifi_disconnect();
+					wifi_startup(ssid, password);
+				} else {
+					MON_NL("Wi-Fi credentials unchanged");
+					wifi_get_net_info();
+				}
+			} else {
+				strncpy(ssid, conn_info->network_ssid, MAX_SSID_LENGTH);
+				strncpy(password, conn_info->pass_phrase, MAX_PASS_PHRASE_LENGTH);
+				wifi_startup(ssid, password);
+			}
+		}
+		if (wifi_tools.is_connected) {
+			//
+			// Check if the connect code has been run
+			//
+			if (!wifi_connect_processed) {
+				wifi_connect_processed = true;
+				wifi_disconnect_processed = false;
+				//
 				MON_NL("Wi-Fi Connected");
 				//
 				// Update the current network information structure
@@ -267,65 +258,19 @@ void task_wifi(void *pvParameters)
 				vTaskDelay(pdMS_TO_TICKS(1000));
 				xQueueSend(spi_comms_queue, &message,
 					0); // Send network information to SPI task
-				break;
 			}
-
-			case WL_DISCONNECTED: {
+		} else {
+			wifi_tools.reconnect();
+			//
+			// Check if the disconnect code has been run
+			//
+			if (!wifi_disconnect_processed) {
+				// run the code that depends on the network being disconnected
+				wifi_disconnect_processed = true;
+				wifi_connect_processed = false;
+				//
 				MON_NL("Wi-Fi Disconnected");
 				wifi_send_server_command(PROTOCOL_PACKET_TYPE_CMD_SHUTDOWN_GDB_SERVER);
-				wifi_status = wifi_connect(); // Attempt to reconnect to Wi-Fi
-				break;
-			}
-			default: {
-				MON_PRINTF("Wi-Fi status changed = %d\r\n", wifi_status);
-				wifi_status = WL_DISCONNECTED;
-				break;
-			}
-			}
-
-		} else {
-			//
-			// Wi-Fi status has not changed, so just wait for a message from the other
-			// tasks or spi driver
-			//
-			result = xQueueReceive(wifi_comms_queue, &message, wifi_state_poll_period);
-			if (result == pdTRUE) {
-				size_t data_length;
-				size_t packet_size;
-				protocol_packet_type_e packet_type;
-				uint8_t *packet_data;
-				packet_size = protocol_split(message, &data_length, &packet_type, &packet_data);
-				//
-				// Process the received packet
-				//
-				network_connection_info_s *conn_info = (network_connection_info_s *)packet_data;
-				MON_NL("Network info received");
-				MON_PRINTF("SSID: %s\r\n", conn_info->network_ssid);
-				MON_PRINTF("Passphrase: %s\r\n", conn_info->pass_phrase);
-				//
-				// Check if the Wi-Fi is already connected
-				//
-				wifi_status = WiFi.status();
-				if (wifi_status == WL_CONNECTED) {
-					//
-					// Check if the network information has changed
-					//
-					if (strcmp(ssid, conn_info->network_ssid) != 0 || strcmp(password, conn_info->pass_phrase) != 0) {
-						MON_NL("Wi-Fi credentials changed, reconnecting...");
-						wifi_disconnect(); // Disconnect from the current Wi-Fi connection
-						memset(&network_info, 0, sizeof(network_connection_info_s));
-						strncpy(ssid, conn_info->network_ssid, MAX_SSID_LENGTH);
-						strncpy(password, conn_info->pass_phrase, MAX_PASS_PHRASE_LENGTH);
-						wifi_connect();
-					} else {
-						MON_NL("Wi-Fi credentials unchanged");
-						wifi_get_net_info();
-					}
-				} else {
-					strncpy(ssid, conn_info->network_ssid, MAX_SSID_LENGTH);
-					strncpy(password, conn_info->pass_phrase, MAX_PASS_PHRASE_LENGTH);
-					wifi_connect();
-				}
 			}
 		}
 	}
