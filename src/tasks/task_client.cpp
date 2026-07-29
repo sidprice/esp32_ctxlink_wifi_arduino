@@ -34,7 +34,7 @@ void send_client_state_to_ctxlink(server_task_params_t *server_params, uint8_t s
 	uint8_t *message = get_next_spi_buffer();
 	memcpy(message, &status_packet, sizeof(protocol_packet_status_s));
 	package_data(message, sizeof(protocol_packet_status_s), PROTOCOL_PACKET_TYPE_STATUS);
-	xQueueSend(spi_comms_queue, &message, 0);
+	xQueueSend(spi_comms_input_queue, &message, 0);
 }
 
 /**
@@ -70,7 +70,7 @@ void task_client(void *pvParameters)
 			// }
 			// MONITOR(println());
 			ctxlink_toggle_nReady();
-			xQueueSend(spi_comms_queue, &net_input_buffer, 0);
+			xQueueSend(spi_comms_input_queue, &net_input_buffer, 0);
 		} else if (bytes_received == 0) {
 			MONITOR(println("Client disconnected"));
 			close(client_fd);

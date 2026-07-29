@@ -69,7 +69,7 @@ void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg
 	digitalWrite(ATTN, HIGH);
 	//
 	if (is_tx == false) {
-		xQueueSendFromISR(spi_comms_queue, (uint8_t *)&trans->rx_buffer, NULL);
+		xQueueSendFromISR(spi_comms_input_queue, (uint8_t *)&trans->rx_buffer, NULL);
 	}
 }
 

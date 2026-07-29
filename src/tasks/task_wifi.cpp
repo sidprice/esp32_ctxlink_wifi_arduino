@@ -119,7 +119,7 @@ void wifi_get_net_info(void)
 	package_data(message, sizeof(network_connection_info_s), PROTOCOL_PACKET_TYPE_NETWORK_INFO);
 	//
 	// Send to ctxLink via SPI task
-	xQueueSend(spi_comms_queue, &message, 0);
+	xQueueSend(spi_comms_input_queue, &message, 0);
 }
 
 /**
@@ -256,7 +256,7 @@ void task_wifi(void *pvParameters)
 				//
 				control_esp32_ready(true);
 				vTaskDelay(pdMS_TO_TICKS(1000));
-				xQueueSend(spi_comms_queue, &message,
+				xQueueSend(spi_comms_input_queue, &message,
 					0); // Send network information to SPI task
 			}
 		} else {

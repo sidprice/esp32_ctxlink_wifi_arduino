@@ -46,7 +46,7 @@ constexpr uint32_t spi_comms_queue_length = 10;
  *
  * This queue is used to send messages between the other tasks and the SPI task.
  */
-QueueHandle_t spi_comms_queue;
+QueueHandle_t spi_comms_input_queue;
 
 portMUX_TYPE my_lock = portMUX_INITIALIZER_UNLOCKED;
 
@@ -107,7 +107,8 @@ uint8_t *get_spi_buffer(uint8_t index)
 void task_spi_comms(void *pvParameters)
 {
 	static uint8_t *message;
-	spi_comms_queue = xQueueCreate(spi_comms_queue_length, sizeof(uint8_t *)); // Create the queue for the SPI task
+	spi_comms_input_queue =
+		xQueueCreate(spi_comms_queue_length, sizeof(uint8_t *)); // Create the queue for the SPI task
 	//
 	// TODO is this a god place for this?
 	//
@@ -115,7 +116,7 @@ void task_spi_comms(void *pvParameters)
 
 	while (true) {
 		// Wait for a message from the other tasks or spi driver
-		xQueueReceive(spi_comms_queue, &message, portMAX_DELAY);
+		xQueueReceive(spi_comms_input_queue, &message, portMAX_DELAY);
 		//
 		// Process the message
 		//
