@@ -61,7 +61,6 @@ void task_client(void *pvParameters)
 			// Send input to the SPI task for forwarding to ctxLink
 			//
 			packed_size = package_data(net_input_buffer, bytes_received, server_params->source_type);
-			MON_PRINTF("Bytes received: %d\r\n", bytes_received);
 			// MONITOR(print("Bytes received: "));
 			// MONITOR(println(bytes_received));
 			// for (int i = 0; i < packed_size; i++)
@@ -72,7 +71,7 @@ void task_client(void *pvParameters)
 			ctxlink_toggle_nReady();
 			xQueueSend(spi_comms_input_queue, &net_input_buffer, 0);
 		} else if (bytes_received == 0) {
-			MONITOR(println("Client disconnected"));
+			MON_NL("Client disconnected");
 			close(client_fd);
 			client_fd = -1;
 			//
@@ -82,17 +81,16 @@ void task_client(void *pvParameters)
 			break;
 		} else if (errno == EAGAIN || errno == EWOULDBLOCK) {
 			// No data available, continue the loop
-			MONITOR(println("Would block socket state"));
+			MON_NL("Would block socket state");
 			// vTaskDelay(10 / portTICK_PERIOD_MS); // Yield to other tasks
 		} else if (errno == ECONNRESET) {
-			MONITOR(println("Client disconnected abruptly (ECONNRESET)"));
+			MON_NL("Client disconnected abruptly (ECONNRESET)");
 			close(client_fd);
 			client_fd = -1;
 			send_client_state_to_ctxlink(server_params, 0x00);
 			break;
 		} else {
-			MONITOR(print("Socket read failed: "));
-			MONITOR(println(errno));
+			MON_PRINTF("Socket read failed: %d\r\n", errno);
 			close(client_fd);
 			client_fd = -1;
 			send_client_state_to_ctxlink(server_params, 0x00);

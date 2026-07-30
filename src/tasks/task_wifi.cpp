@@ -217,6 +217,7 @@ void task_wifi(void *pvParameters)
 				//
 				memset(&network_info, 0, sizeof(network_connection_info_s));
 				MON_PRINTF("Wi-Fi connected to SSID: %s\r\n", ssid);
+				MON_PRINTF("Wi-Fi IP address: %s\r\n", WiFi.localIP().toString().c_str());
 				strncpy(network_info.network_ssid, ssid, MAX_SSID_LENGTH);
 				network_info.type = PROTOCOL_PACKET_STATUS_TYPE_NETWORK_CLIENT;
 				network_info.connected = 0x01; // 0x01 = connected, 0x00 = disconnected

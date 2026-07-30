@@ -49,15 +49,13 @@ bool configure_server(in_port_t *port, int *server_fd, struct sockaddr_in *serve
 
 	// Bind socket to address
 	if (bind(*server_fd, (struct sockaddr *)server_addr, sizeof(*server_addr)) < 0) {
-		MONITOR(print("Socket bind failed -> "));
-		MONITOR(println(errno));
+		MON_PRINTF("Socket bind failed -> %d\r\n", errno);
 		return false;
 	}
 
 	// Listen for incoming connections
 	if (listen(*server_fd, 5) < 0) { // TODO: Test for single client operation, set to 1 or 0?
-		MONITOR(print("Socket listen failed -> "));
-		MONITOR(println(errno));
+		MON_PRINTF("Socket listen failed -> %d\r\n", errno);
 		return false;
 	}
 	return true;
@@ -95,11 +93,10 @@ void task_wifi_server(void *pvParameters)
 		while (true) {
 			client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &addr_len);
 			if (client_fd < 0) {
-				MONITOR(print("Socket accept failed"));
-				MONITOR(println(errno));
+				MON_PRINTF("Socket accept failed -> %d\r\n", errno);
 				return; // TODO Deal with error, cannot return!
 			}
-			MONITOR(println("Client connected"));
+			MON_NL("Client connected");
 			//
 			// Disable Nagle's algorithm for the client socket to reduce latency
 			//
@@ -135,8 +132,7 @@ void task_wifi_server(void *pvParameters)
 						while (packet_size > 0) {
 							bytes_sent = send(client_fd, packet_data, packet_size, 0);
 							if (bytes_sent < 0) {
-								MONITOR(print("Socket send failed: "));
-								MONITOR(println(errno));
+								MON_PRINTF("Socket send failed -> %d\r\n", errno);
 								break;
 							}
 							packet_size -= bytes_sent;

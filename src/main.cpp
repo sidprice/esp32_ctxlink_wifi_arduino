@@ -35,7 +35,7 @@ void setup()
 	//     delay(10);     // will pause Zero, Leonardo, etc until serial console
 	//     opens
 	// #endif
-	Serial.begin(115200);
+	Serial.begin(921600);
 
 	while (!Serial)
 		delay(10); // will pause Zero, Leonardo, etc until serial console opens
@@ -53,8 +53,8 @@ void setup()
 	//
 	// Create the monitor output scheduling task
 	//
-	xTaskCreate(task_monitor, "Monitor", 4096, NULL, 1, NULL);
-	//
+	// xTaskCreate(task_monitor, "Monitor", 4096, NULL, 1, NULL);
+	xTaskCreatePinnedToCore(task_monitor, "Monitor", 4096, NULL, 1, NULL, 1); // Pin to core 1	//
 	// Create the SPI communications task
 	//
 	xTaskCreate(task_spi_comms, "SPI Comms", 4096, NULL, 2, NULL);

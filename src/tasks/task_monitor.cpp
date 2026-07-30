@@ -35,6 +35,7 @@ void task_monitor(void *pvParameters)
 		monitor_output_message_t message;
 		if (xQueueReceive(task_monitor_queue, &message, portMAX_DELAY) == pdTRUE) {
 			Serial.print(message.message);
+			Serial.flush();
 		}
 	}
 }
