@@ -48,14 +48,55 @@ bool system_setup_done = false;
  *
  * @param transaction_buffer  Pointer to the packet to be sent
  *
- *  We are about to start a TX transaction, so save the packet pointer and
- *  assert the ATTN signal to ctxLink.
+ * 	If the transaction_buffer is NULL, the call is to check for any
+ * transactions queued.
+ * 
+ *  If the spi comms output queue has a single entry:
+ * 		Save the buffer pointer and assert nATTN.
+ * 
+ * If the spi comms output queue has more than 1 entry:
+ * 		Place the buffer into the output queue.
+ * 
+ * Upon transaction completion the entry must be removed from the queue.
  */
 void spi_save_tx_transaction_buffer(uint8_t *transaction_buffer)
 {
-	tx_saved_transaction = transaction_buffer;
+	UBaseType_t queue_count;
+	queue_count = uxQueueMessagesWaiting(spi_comms_output_queue);
+	MON_PRINTF("Entry - Queue count: %d\r\n", queue_count);
+	//
+	// If a transcation buffer is received, queue it.
+	//
+	if (transaction_buffer != NULL) {
+		xQueueSend(spi_comms_output_queue, &transaction_buffer, 0);
+	} else if (queue_count == 0) {
+		//
+		// If there are no queued transactions, do nothing.
+		//
+		return;
+	}
+	//
+	// If there is more than 1 queued item, we are done.
+	//
+	queue_count = uxQueueMessagesWaiting(spi_comms_output_queue);
+	MON_PRINTF("Queue count: %d\r\n", queue_count);
+	if (queue_count > 1) {
+		return;
+	}
+	//
+	// Get the next transaction buffer from the queue and save it for transmission.
+	//
+	// Leave the item in the queue, it is removed on completion of the transaction.
+	//
+	xQueuePeek(spi_comms_output_queue, &tx_saved_transaction, 0); // Get the next transaction buffer from the queue
+	//
+	// Signal ctxLink that there is a transaction ready to be sent.
+	//
 	digitalWrite(ATTN, LOW);
 }
+
+static uint8_t packet_transaction_completed[] = {
+	PROTOCOL_MAGIC1, PROTOCOL_MAGIC2, PROTOCOL_TRANSACTION_COMPLETED, 0x00, 0x01, 0x01}; // 0x01 = transaction completed
 
 /**
  * @brief Callback function on transaction completed
@@ -68,8 +109,23 @@ void IRAM_ATTR userTransactionCallback(spi_slave_transaction_t *trans, void *arg
 	digitalWrite(nSPI_READY, HIGH); // Transaction is done, SPI not ready
 	digitalWrite(ATTN, HIGH);
 	//
+	UBaseType_t queue_count;
+	queue_count = uxQueueMessagesWaiting(spi_comms_output_queue);
+	MON_PRINTF("End Transaction - Queue count: %d\r\n", queue_count);
 	if (is_tx == false) {
 		xQueueSendFromISR(spi_comms_input_queue, (uint8_t *)&trans->rx_buffer, NULL);
+	} else {
+		uint8_t *message;
+		MON_NL("TX transaction completed");
+		//
+		// For a TX transcation, remove the completed transaction from the output queue
+		// and send a transaction completed message to the SPI task.
+		xQueueReceiveFromISR(spi_comms_output_queue, &message, NULL); // Remove the completed transaction from the queue
+		queue_count = uxQueueMessagesWaiting(spi_comms_output_queue);
+		MON_PRINTF("Remove - Queue count: %d\r\n", queue_count);
+		message = get_next_spi_buffer(); // Get a buffer for the transaction completed message
+		memcpy(message, packet_transaction_completed, sizeof(packet_transaction_completed));
+		xQueueSendFromISR(spi_comms_input_queue, &message, NULL);
 	}
 }
 

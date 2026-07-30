@@ -36,10 +36,16 @@ static bool tx_inflight = false;
 uint8_t spi_buffers[SPI_BUFFER_COUNT][SPI_BUFFER_SIZE] __attribute__((aligned(4)));
 
 /**
- * @brief This is the depth of the SPI task messaging queue
+ * @brief This is the depth of the SPI task input messaging queue
  *
  */
-constexpr uint32_t spi_comms_queue_length = 10;
+constexpr uint32_t spi_comms_input_queue_length = 10;
+
+/**
+ * @brief This is the depth of the SPI task output messaging queue
+ *
+ */
+constexpr uint32_t spi_comms_output_queue_length = 4;
 
 /**
  * @brief The SPI task message queue
@@ -47,6 +53,14 @@ constexpr uint32_t spi_comms_queue_length = 10;
  * This queue is used to send messages between the other tasks and the SPI task.
  */
 QueueHandle_t spi_comms_input_queue;
+
+/**
+ * @brief The SPI Task output queue
+ * 
+ * This queue is used to queue messages for ctxLink using the SPI interface.
+ * 
+ */
+QueueHandle_t spi_comms_output_queue;
 
 portMUX_TYPE my_lock = portMUX_INITIALIZER_UNLOCKED;
 
@@ -65,7 +79,6 @@ uint8_t get_next_spi_buffer_index(void)
 	uint8_t next_buffer = buffer_index;
 	buffer_index = (buffer_index + 1) % SPI_BUFFER_COUNT;
 	portEXIT_CRITICAL(&my_lock);
-	MON_PRINTF("Index: %d\r\n", next_buffer);
 	return next_buffer;
 }
 
@@ -108,9 +121,10 @@ void task_spi_comms(void *pvParameters)
 {
 	static uint8_t *message;
 	spi_comms_input_queue =
-		xQueueCreate(spi_comms_queue_length, sizeof(uint8_t *)); // Create the queue for the SPI task
+		xQueueCreate(spi_comms_input_queue_length, sizeof(uint8_t *)); // Create the queue for the SPI task
+	spi_comms_output_queue = xQueueCreate(spi_comms_output_queue_length, sizeof(uint8_t *)); // Create
 	//
-	// TODO is this a god place for this?
+	// TODO is this a good place for this?
 	//
 	system_setup_done = true;
 
@@ -166,6 +180,15 @@ void task_spi_comms(void *pvParameters)
 		case PROTOCOL_PACKET_TYPE_STATUS: {
 			spi_save_tx_transaction_buffer(message); // Save the transaction buffer for SPI driver
 			TOGGLE_PIN(PINB);
+			break;
+		}
+
+		case PROTOCOL_TRANSACTION_COMPLETED: {
+			MON_NL("Transaction completed");
+			//
+			// Check if there are transactions queued for sending to ctxLink
+			//
+			spi_save_tx_transaction_buffer(NULL); // NULL means no new data.
 			break;
 		}
 		default: {

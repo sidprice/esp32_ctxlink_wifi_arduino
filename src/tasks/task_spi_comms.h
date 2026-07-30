@@ -17,6 +17,7 @@
 #include <Arduino.h>
 
 extern QueueHandle_t spi_comms_input_queue;
+extern QueueHandle_t spi_comms_output_queue;
 
 #define SPI_BUFFER_SIZE 2048
 
