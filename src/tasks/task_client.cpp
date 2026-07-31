@@ -28,7 +28,22 @@
  */
 void send_client_state_to_ctxlink(server_task_params_t *server_params, uint8_t state)
 {
-	protocol_packet_status_s status_packet;
+	protocol_packet_status_s status_packet = {0};
+	protocol_packet_command_s command_packet = {0};
+	//
+	// If the state is 0x00, then the client has disconnected, so we need to inform the server
+	//
+	if (state == 0x00) {
+		command_packet.type = PROTOCOL_PACKET_TYPE_COMMAND;
+		command_packet.command = PROTOCOL_PACKET_TYPE_CMD_CLIENT_CLOSED;
+		uint8_t *message = get_next_spi_buffer();
+		memcpy(message, &command_packet, sizeof(protocol_packet_command_s));
+		package_data(message, sizeof(protocol_packet_command_s), PROTOCOL_PACKET_TYPE_COMMAND);
+		xQueueSend(server_params->server_queue, &message, 0);
+	}
+	//
+	// Inform ctxLink of the client state
+	//
 	status_packet.type = server_params->server_type; // Indicate the server type
 	status_packet.status = state;                    // 0x01 = connected, 0x00 = disconnected
 	uint8_t *message = get_next_spi_buffer();

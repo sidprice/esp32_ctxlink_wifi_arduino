@@ -71,6 +71,7 @@ void task_wifi_server(void *pvParameters)
 	server_task_params_t *server_params = (server_task_params_t *)pvParameters;
 	int server_fd, client_fd;
 	struct sockaddr_in server_addr, client_addr;
+	bool client_connected = false;
 
 	server_queue = xQueueCreate(server_queue_length,
 		sizeof(uint8_t *));                     // Create the queue for the GDB server task
@@ -97,6 +98,7 @@ void task_wifi_server(void *pvParameters)
 				return; // TODO Deal with error, cannot return!
 			}
 			MON_NL("Client connected");
+			client_connected = true;
 			//
 			// Disable Nagle's algorithm for the client socket to reduce latency
 			//
@@ -111,7 +113,7 @@ void task_wifi_server(void *pvParameters)
 			//
 			//  Server data handling loop
 			//
-			while (true) {
+			while (client_connected) {
 				BaseType_t result;
 				uint8_t *message;
 				//
@@ -152,6 +154,11 @@ void task_wifi_server(void *pvParameters)
 						} else if (command_packet->command == PROTOCOL_PACKET_TYPE_CMD_START_GDB_SERVER) {
 							configure_server(&port, &server_fd, &server_addr);
 							MON_NL("Reconfigured Server");
+						} else if (command_packet->command == PROTOCOL_PACKET_TYPE_CMD_CLIENT_CLOSED) {
+							MON_NL("Client closed connection");
+							close(client_fd);
+							client_fd = -1;
+							client_connected = false;
 						} else {
 							MON_NL("Unknown command received");
 						}
