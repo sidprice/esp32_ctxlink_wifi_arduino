@@ -84,4 +84,8 @@
 		snprintf(msg.message, sizeof(msg.message), FORMAT, __VA_ARGS__); \
 		generic_send(msg);                                               \
 	} while (0)
+#else
+#define MON(TEXT)
+#define MON_NL(TEXT)
+#define MON_PRINTF(FORMAT, ...)
 #endif // SERIAL_ON
